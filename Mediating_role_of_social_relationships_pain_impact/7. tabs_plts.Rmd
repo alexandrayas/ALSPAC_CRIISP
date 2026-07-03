@@ -1,0 +1,1423 @@
+---
+title: "Tables and figures"
+author: "Alexandria Andrayas"
+#output: html_document
+output: word_document
+date: "`r Sys.Date()`"
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(haven)
+library(labelled)
+library(sticky)
+library(tidyverse)
+library(gt)
+library(gtsummary)
+library(broom)
+library(biostat3)
+library(ggpubr)
+library(ggcorrplot)
+library(Gmisc)
+library(grid)
+library(glue)
+
+path_to_data <- "//path/to/data/"
+path_to_outputs <- "//path/to/outputs/"
+```
+
+
+# SF-36 ITEMS TABLE
+
+```{r sf36-items, echo=FALSE}
+sf36_df <- data.frame(
+  `Selfcare` = c(
+    "Doing moderate activities (e.g., moving a table, pushing a vacuum cleaner, bowling, or playing golf)",
+    "Lifting or carrying groceries",
+    "Climbing one flight of stairs",
+    "Bending, kneeling, or stooping",
+    "Walking one hundred metres",
+    "Walking half a mile",
+    "Bathing or dressing"
+  ),
+  `Social` = c(
+    "Cut down on amount of time spent on work or other activities due to emotional problems",
+    "Accomplished less than would like due to emotional problems",
+    "Did work or activities less carefully than usual due to emotional problems",
+    "Time physical or emotional problems interfered with social activities",
+    "Extent of interference with normal social activities with family, friends, neighbours, or groups",
+    "", ""
+  ),
+  `Work` = c(
+    "Cut down on amount of time spent on work or other activities due to physical health",
+    "Accomplished less than would like due to physical health",
+    "Limited in kind of work or other activities due to physical health",
+    "Difficulty performing work or other activities (e.g., it took extra effort)",
+    "", "", ""
+  ),
+  stringsAsFactors = FALSE
+)
+
+sf36_df %>%
+  gt() %>%
+  cols_label(
+    `Selfcare` = "Daily domain",
+    `Social` = "Social domain",
+    `Work` = "Work domain"
+  ) %>%
+  tab_style(style = cell_text(weight = "bold"), 
+            locations = cells_column_labels())
+```
+
+
+# SOCIAL SUPPORT ITEMS TABLE
+
+```{r supp-items, echo=FALSE}
+supp_df <- data.frame(
+  `Emotional` = c(
+    'I have someone who understands my problems',
+    'I have someone who will listen to me when I need to talk',
+    'I feel there are people I can talk to if I am upset',
+    'I have someone to talk with when I have a bad day', 
+    'I have someone I trust to talk with about my problems',
+    'I have someone I trust to talk with about my feelings',
+    'I can get helpful advice from others when dealing with a problem',
+    'I have someone to turn to for suggestions about how to deal with a problem'
+  ),
+  `Practical` = c(
+    'Someone is around to make my meals if I am unable to do it myself',
+    'I have someone to take me shopping if I need it',
+    'I have someone to help me if I am sick in bed',
+    'I have someone to pick up medicine for me if I need it',
+    'I have someone to take me to the doctor if I need it',
+    'There is someone around to help me if I need it',
+    'I can find someone to drive me places if I need it',
+    'I can get help cleaning up around my home if I need it'
+  ),
+  stringsAsFactors = FALSE
+)
+
+supp_df %>%
+  gt() %>%
+  cols_label(
+    `Emotional` = "Emotional support",
+    `Practical` = "Practical support"
+  ) %>%
+  tab_style(style = cell_text(weight = "bold"), 
+            locations = cells_column_labels())
+```
+
+# G-COMPUTATION EFFECTS DESCRIPTION TABLE
+
+```{r gform-ests, echo=FALSE}
+g_med_effs_df <- data.frame(
+  `Effect` = c(
+    "Total Causal Effect (TCE)",
+    "Natural Direct Effect (NDE)",
+    "Natural Indirect Effect (NIE)",
+    "Proportion Mediated (PM)",
+    "Controlled Direct Effect (CDE)"
+  ),
+  `Description` = c(
+    "Difference between potential outc_labs if all experienced high (X=1) vs. low (X=0) pain impact where support varies naturally.",
+    "Difference between potential outc_labs if all had high pain impact but support fixed at level under low pain impact vs. all had low pain impact.",
+    "Difference between TCE and NDE, capturing effect via support.",
+    "Proportion of the total effect of early pain impact on low pain impact explained by support (NIE / TCE).",
+    "Difference between potential outc_labs for high vs low pain impact, if support is fixed to high (m=1) for everyone in this case."
+  )#,
+  #`Formula` = c(
+  #  "log{E[Y{X=1,M(X=1)}] / (1-E[Y{X=1,M(X=1)}])} - log{E[Y{X=0,M(X=0)}] / (1-E[Y{X=0,M(X=0)}])}",
+  #  "log{E[Y{X=1,M(X=0)}] / (1-E[Y{X=1,M(X=0)}])} - log{E[Y{X=0,M(X=0)}] / (1-E[Y{X=0,M(X=0)}])}",
+  #  "TCE - NDE",
+  #  "NIE / TCE",
+  #  "log(E{Y(X=1,M=m)} / [1-E{Y(X=1,M=m)}]) - log(E{Y(X=0,M=m)} / [1-E{Y(X=0,M=m)}])"
+  #  )
+)
+
+g_med_effs_df %>%
+  gt() %>%
+  cols_label(
+    `Effect` = "Effect Type",
+    `Description` = "Explanation"#,
+    #`Formula` = "Formula"
+  ) %>%
+  #cols_width(everything()~px(400)) %>%
+  tab_style(style = cell_text(weight = "bold"), 
+            locations = cells_column_labels())
+```
+
+
+```{r load, echo=FALSE}
+# Read in data and remove attributes
+alldf <- read_dta(paste0(path_to_data,'data_irt_all.dta'))
+alldf <- data.frame(to_factor(alldf, sort_levels='auto'))
+alldf <- remove_attributes(alldf, 'format.stata')
+
+# Define measures
+exp_labs <- c('selfc_spl_18','social_spl_18','work_spl_18')
+intc_labs <- c('mfq_cutoff_21','gad_cutoff_21')
+med_labs <- c('social_integration_sc_grp_25',
+              'emo_supp_sc_grp_25',
+              'prac_supp_sc_grp_25',
+              'covid_inpers_cont_adult_grp_28',
+              'covid4_dist_cont_adult_grp_28')
+outc_labs <- c('daily_spl_30', 'social_spl_30', 'work_spl_30')
+
+# Baseline confounders
+baseconf <- c('ethnicity', 'm_pregsmk', 'parent_sc_0', 'm_homown_0', 'parent_mhp_1')
+
+# Long labels
+long_labs <- list('sex' = 'Sex assigned at birth, female', 
+                  'ethnicity' = 'Ethnicity, white',
+                  'm_pregsmk' = 'Mother smoked in pregnancy (0y)', 
+                  'parent_sc_0' = 'Highest parental social class (0y)', 
+                  'm_homown_0' = 'Maternal home ownership (0y), rented', 
+                  'parent_mhp_1' = 'Parental mental health condition (1y)',
+                  'pain_1day_mnth_18' = 'Pain >= 1 day in past month (18y)', 
+                  'pain_more3mnths_18' = 'Pain >= 3 months (18y)',
+                  'pain_1day_mnth_30' = 'Pain >= 1 day in past month (30y)', 
+                  'pain_more3mnths_30' = 'Pain >= 3 months (30y)',
+                  'selfc_spl_18' = 'Health limits daily activities (18y)',
+                  'social_spl_18' = 'Health limits social activities (18y)',
+                  'work_spl_18' = 'Health limits work (18y)',
+                  'mfq_cutoff_21' = 'Higher depressive symptoms (21y)',
+                  'gad_cutoff_21' = 'Higher anxiety symptoms (21y)',
+                  'social_integration_sc_grp_25' = 'Wider social network (25y)',
+                  'emo_supp_sc_grp_25' = 'Higher emotional support (25y)',
+                  'prac_supp_sc_grp_25' = 'Higher practical support (25y)',
+                  'covid_inpers_cont_adult_grp_28' = 'In-person COVID contact (28y)',
+                  'covid4_dist_cont_adult_grp_28' = 'Distant COVID contact (28y)',
+                  'daily_spl_30' = 'Pain impacts daily activities (30y)', 
+                  'social_spl_30' = 'Pain impacts social activities (30y)', 
+                  'work_spl_30' = 'Pain impacts work activities (30y)'
+)
+
+# Assign labels
+var_label(alldf) <- long_labs
+
+# Persist labels
+alldf <- sticky_all(alldf)
+
+# Create subsetted dataset limiting to those with pain at 18
+df_wpain <- alldf[alldf$pain_1day_mnth_18 %in% 1,]
+```
+
+
+# FLOWCHART
+
+```{r flowchart-func, echo=FALSE}
+# Helper for comma-formatted counts
+nfmt <- function(x) format(x, big.mark = ",", scientific = FALSE)
+
+# Function to produce boxes
+make_box <- function(header, body = NULL, x, y,
+                     width = unit(0.28, "npc"),
+                     fill = "#F7F7F7",
+                     cex = 0.75) {
+  
+  if (is.null(body)) {
+    boxGrob(
+      label = header,
+      x = unit(x, "npc"),
+      y = unit(y, "npc"),
+      width = width,
+      txt_gp = gpar(cex = cex),
+      box_gp = gpar(fill = fill, col = "grey30")
+    )
+  } else {
+    boxHeaderGrob(
+      header = header,
+      body = body,
+      x = unit(x, "npc"),
+      y = unit(y, "npc"),
+      width = width,
+      header_gp = gpar(fontface = "bold", cex = cex),
+      body_gp = gpar(cex = cex * 0.9),
+      box_gp = gpar(fill = fill, col = "grey30")
+    )
+  }
+}
+
+# Function to produce flowchart
+draw_attrition_flowchart <- function() {
+  
+  # Counts
+  n_initial <- nrow(alldf)
+  n_baseconf <- nrow(alldf[complete.cases(alldf[,baseconf]),])
+  n_exp <- nrow(alldf[complete.cases(alldf[,c(baseconf,exp_labs)]),])
+  n_exp_intc <- nrow(alldf[complete.cases(alldf[,c(baseconf,exp_labs,intc_labs)]),])
+  n_exp_med <- nrow(alldf[complete.cases(alldf[,c(baseconf,exp_labs,med_labs)]),])
+  n_exp_intc_med <- nrow(alldf[complete.cases(alldf[,c(baseconf,exp_labs,intc_labs,med_labs)]),])
+  n_exp_outc <- nrow(alldf[complete.cases(alldf[,c(baseconf,exp_labs,outc_labs)]),])
+  n_exp_med_outc <- nrow(alldf[complete.cases(alldf[,c(baseconf,exp_labs,med_labs,outc_labs)]),])
+  n_full <- nrow(alldf[complete.cases(alldf[,c(baseconf,exp_labs,intc_labs,med_labs,outc_labs)]),])
+  
+  n_baseconf_prop <- round(n_baseconf/nrow(alldf)*100,0)
+  n_exp_prop <- round(n_exp/nrow(alldf)*100,0)
+  n_exp_intc_prop <- round(n_exp_intc/nrow(alldf)*100,0)
+  n_exp_med_prop <- round(n_exp_med/nrow(alldf)*100,0)
+  n_exp_intc_med_prop <- round(n_exp_intc_med/nrow(alldf)*100,0)
+  n_exp_outc_prop <- round(n_exp_outc/nrow(alldf)*100,0)
+  n_exp_med_outc_prop <- round(n_exp_med_outc/nrow(alldf)*100,0)
+  n_full_prop <- round(n_full/nrow(alldf)*100,0)
+  
+  grid.newpage()
+  
+  b_initial <- make_box(
+    header = glue("Eligble sample who provided pain data (age 18)\nN = {nfmt(n_initial)}"),
+    x = 0.50, y = 0.94,
+    width = unit(0.34, "npc")#,
+    #fill = "#E8F0FF"
+  )
+  
+  b_base <- make_box(
+    header = glue("Complete baseline confounders\nN = {nfmt(n_baseconf)} ({n_baseconf_prop}%)"),
+    x = 0.50, y = 0.82,
+    width = unit(0.34, "npc")#,
+    #fill = "#E8F0FF"
+  )
+  
+  b_hlthlim <- make_box(
+    header = glue("+ Complete health limitations (age 18)\nN = {nfmt(n_exp)} ({n_exp_prop}%)"),
+    x = 0.50, y = 0.66,
+    width = unit(0.34, "npc")#,
+    #fill = "#E6F4EA"
+  )
+  
+  b_mh <- make_box(
+    header = glue("+ Complete mental health (age 21)\nN = {nfmt(n_exp_intc)} ({n_exp_intc_prop}%)"),
+    x = 0.18, y = 0.44,
+    width = unit(0.27, "npc")#,
+    #fill = "#FFF4E6"
+  )
+  
+  b_social <- make_box(
+    header = glue("+ Complete social network/support/contact (ages 23-28)\nN = {nfmt(n_exp_med)} ({n_exp_med_prop}%)"),
+    x = 0.50, y = 0.44,
+    width = unit(0.35, "npc")#,
+    #fill = "#FFF4E6"
+  )
+  
+  b_later <- make_box(
+    header = glue("+ Complete pain impact (age 30)\nN = {nfmt(n_exp_outc)} ({n_exp_outc_prop}%)"),
+    x = 0.82, y = 0.44,
+    width = unit(0.27, "npc")#,
+    #fill = "#FFF4E6"
+  )
+  
+  b_mh_social <- make_box(
+    header = glue("Complete mental health + social network/support/contact\nN = {nfmt(n_exp_intc_med)} ({n_exp_intc_med_prop}%)"),
+    x = 0.32, y = 0.22,
+    width = unit(0.35, "npc")#,
+    #fill = "#F2E8FF"
+  )
+  
+  b_social_pimp <- make_box(
+    header = glue("Complete social network/support/contact + pain impact\nN = {nfmt(n_exp_med_outc)} ({n_exp_med_outc_prop}%)"),
+    x = 0.68, y = 0.22,
+    width = unit(0.35, "npc")#,
+    #fill = "#F2E8FF"
+  )
+  
+  b_final <- make_box(
+    header = glue("Full complete-records sample\nN = {nfmt(n_full)} ({n_full_prop}%)"),
+    x = 0.50, y = 0.07,
+    width = unit(0.44, "npc")#,
+    #fill = "#FDECEC"
+  )
+  
+  boxes <- list(
+    b_initial, b_base, b_hlthlim,
+    b_mh, b_social, b_later,
+    b_mh_social, b_social_pimp,
+    b_final
+  )
+  
+  lapply(boxes, grid.draw)
+  
+  # Connections
+  grid.draw(connectGrob(b_initial, b_base, type = "vert"))
+  grid.draw(connectGrob(b_base, b_hlthlim, type = "vert"))
+  
+  grid.draw(connectGrob(b_hlthlim, b_mh, type = "N"))
+  grid.draw(connectGrob(b_hlthlim, b_social, type = "vert"))
+  grid.draw(connectGrob(b_hlthlim, b_later, type = "N"))
+  
+  grid.draw(connectGrob(b_mh, b_mh_social, type = "N"))
+  grid.draw(connectGrob(b_social, b_mh_social, type = "N"))
+  
+  grid.draw(connectGrob(b_social, b_social_pimp, type = "N"))
+  grid.draw(connectGrob(b_later, b_social_pimp, type = "N"))
+  
+  grid.draw(connectGrob(b_mh_social, b_final, type = "N"))
+  grid.draw(connectGrob(b_social_pimp, b_final, type = "N"))
+  
+  grid.text(
+    label = paste(
+      "Note. Individual measure counts show variable availability;",
+      "thus the actual sample sizes per model vary and are shown in tables."
+    ),
+    x = unit(0.50, "npc"),
+    y = unit(0.015, "npc"),
+    gp = gpar(cex = 0.65, col = "grey30")
+  )
+}
+```
+
+```{r echo=FALSE, fig.width=10, fig.height=12, dpi=350, dev='jpeg'}
+# Save flowchart as JPEG
+jpeg(
+  filename = paste0(path_to_outputs,"attrition_flowchart.jpg"),
+  width = 10,
+  height = 12,
+  units = "in",
+  res = 350,
+  quality = 100
+)
+draw_attrition_flowchart()
+dev.off()
+
+# Show flowchart in knitted document
+draw_attrition_flowchart()
+```
+
+# DESCRIPTIVE STATISTICS TABLE
+
+```{r echo=FALSE}
+# Table variables
+tab_vars <- c('pain_1day_mnth_18','pain_more3mnths_18','pain_1day_mnth_30','pain_more3mnths_30','sex',baseconf,exp_labs,intc_labs,med_labs,outc_labs)
+
+# Change level labels
+desc_df <- alldf %>%
+  mutate(
+    pain_1day_mnth_18 = factor(sex, levels = c(0,1), labels = c("No","Yes")),
+    sex = factor(sex, levels = c(0,1), labels = c("Male","Female")),
+    ethnicity = factor(ethnicity, levels = c(0,1), labels = c("White","Minority ethnic")),
+    m_pregsmk = factor(m_pregsmk, levels = c(0,1), labels = c("No","Yes")),
+    m_homown_0 = factor(m_homown_0, levels = c(0,1), labels = c("Owned","Rented")),
+    parent_mhp_1 = factor(parent_mhp_1, levels = c(0,1), labels = c("No","Yes"))
+  )
+
+# Function to calculate missingness
+missing_col <- function(data, variable, ...) {
+  x <- data[[variable]]
+  n_miss <- sum(is.na(x))
+  p_miss <- sum(is.na(x)) / length(x) * 100
+  
+  #tibble::tibble(missing = sprintf("%s (%.1f%%)", n_miss, p_miss))
+  tibble::tibble(missing = sprintf("%.1f%%", p_miss))
+}
+
+# Categories to show in table
+rows_shown <- list(
+  ethnicity ~ 0,
+  m_homown_0 ~ 0
+  )
+
+# Create descriptive stats table
+tbl_merge(tbls = list(
+  
+  tbl_summary(
+    alldf[, tab_vars],
+    type = list(all_dichotomous() ~ "dichotomous"),
+    value = rows_shown,
+    missing = 'no'
+    ) %>%
+    add_stat(
+      fns = everything() ~ missing_col,
+      location = everything() ~ "label"
+      ) %>%
+    modify_header(missing ~ "**Missing**"),
+  
+  tbl_summary(
+    alldf[, tab_vars], by = 'pain_1day_mnth_18',
+    type = list(all_dichotomous() ~ "dichotomous"),
+    value = rows_shown,
+    missing = 'no'
+    ) %>%
+    add_p()
+  
+  ), tab_spanner = paste0('**',c('Overall','Pain in past month (18y)'),'**')) %>%
+  
+  as_gt()
+```
+
+
+# REGRESSION ESTIMATES
+
+```{r help-func-reg, echo=FALSE}
+## Load regression estimates
+load(paste0(path_to_outputs,"regression_estimates.rda"))
+
+# Generic table function (creates wide gt table with outcomes as column spanners)
+make_gt_table <- function(dat,
+                          row_group_var = NULL,
+                          title = NULL) {
+  
+  outcomes <- unique(dat$outcome)
+  
+  tab_dat <- dat |>
+    mutate(
+      outcome_id = paste0("out", match(outcome, outcomes)),
+      row_label = unname(long_labs[.data[["exposure"]]])
+    ) |>
+    dplyr::select(
+      any_of(row_group_var),
+      row_label,
+      outcome,
+      outcome_id,
+      OR_CI,
+      p,
+      n
+    ) |>
+    distinct()
+  
+  wide <- tab_dat |>
+    dplyr::select(
+      any_of(row_group_var),
+      row_label,
+      outcome_id,
+      OR_CI,
+      p,
+      n
+    ) |>
+    pivot_wider(
+      names_from = outcome_id,
+      values_from = c(OR_CI, p, n),
+      names_glue = "{outcome_id}_{.value}"
+    )
+  
+  gt_tab <- wide |>
+    gt(
+      rowname_col = "row_label",
+      groupname_col = row_group_var
+    ) |>
+    cols_label(
+      contains("OR_CI") ~ "OR (95% CI)",
+      contains("_p") ~ "p-value",
+      contains("_n") ~ "N"
+    )
+  
+  for (i in seq_along(outcomes)) {
+    gt_tab <- gt_tab |>
+      tab_spanner(
+        label = long_labs[outcomes[[i]]],
+        columns = starts_with(paste0("out", i, "_"))
+      )
+  }
+  
+  if (!is.null(title)) {
+    gt_tab <- gt_tab |>
+      tab_header(title = title)
+  }
+  
+  gt_tab |>
+    tab_style(
+      style = cell_text(weight = "bold"),
+      locations = cells_column_spanners()
+    )
+}
+```
+
+## Health limitations on later measures
+
+```{r, echo=FALSE}
+outcome_order <- c(intc_labs, med_labs, outc_labs)
+
+pop_labs <- c(
+  full_sample = "Full sample",
+  samp_with_pain = "Sample with pain"
+)
+
+results_clean |>
+  filter(
+    pop %in% names(pop_labs),
+    term_type == "exposure",
+    exposure %in% exp_labs,
+    outcome %in% outcome_order
+  ) |>
+  mutate(
+    pop_lab = recode(pop, !!!pop_labs),
+    outcome_group = factor(
+      unname(long_labs[outcome]),
+      levels = unname(long_labs[outcome_order])
+    ),
+    term_lab = factor(
+      unname(long_labs[exposure]),
+      levels = unname(long_labs[exp_labs])
+    )
+  ) |>
+  dplyr::select(
+    outcome_group,
+    term_lab,
+    pop_lab,
+    OR_CI,
+    p,
+    n
+  ) |>
+  pivot_wider(
+    names_from = pop_lab,
+    values_from = c(OR_CI, p, n),
+    names_glue = "{pop_lab}_{.value}"
+  ) |>
+  gt(
+    groupname_col = "outcome_group",
+    rowname_col = "term_lab"
+  ) |>
+  cols_label(
+    contains("OR_CI") ~ "OR (95% CI)",
+    contains("_p") ~ "p-value",
+    contains("_n") ~ "N"
+  ) |>
+  tab_spanner(
+    label = "Full sample",
+    columns = starts_with("Full sample_")
+  ) |>
+  tab_spanner(
+    label = "Sample with pain",
+    columns = starts_with("Sample with pain_")
+  ) |>
+  tab_style(
+    style = cell_text(style = "italic", weight = "bold"),
+    locations = cells_row_groups()
+  ) |>
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_spanners()
+  )
+```
+
+
+## Mental health on social support
+
+### Full sample
+
+```{r, echo=FALSE}
+results_clean |>
+  filter(
+    model_set == "mh_on_support",
+    outcome %in% med_labs,
+    term %in% intc_labs,
+    pop == "full_sample"
+  ) |>
+  mutate(
+    adjustment_lab = paste("Adjusted for", unname(long_labs[adjustments]))
+  ) |>
+  make_gt_table(row_group_var = "adjustment_lab")
+```
+
+### Pain sample
+
+```{r, echo=FALSE}
+results_clean |>
+  filter(
+    model_set == "mh_on_support",
+    outcome %in% med_labs,
+    term %in% intc_labs,
+    pop == "samp_with_pain"
+  ) |>
+  mutate(
+    adjustment_lab = paste("Adjusted for", unname(long_labs[adjustments]))
+  ) |>
+  make_gt_table(row_group_var = "adjustment_lab")
+```
+
+
+## Mental health on later pain impact
+
+### Full sample
+
+```{r, echo=FALSE}
+results_clean |>
+  filter(
+    model_set == "mh_on_painimpact",
+    outcome %in% outc_labs,
+    term %in% intc_labs,
+    pop == "full_sample"
+  ) |>
+  mutate(
+    adjustment_lab = "Adjusted for equivalent earlier pain impact domain"
+  ) |>
+  make_gt_table(row_group_var = "adjustment_lab")
+```
+
+### Pain sample 
+
+```{r, echo=FALSE}
+results_clean |>
+  filter(
+    model_set == "mh_on_painimpact",
+    outcome %in% outc_labs,
+    term %in% intc_labs,
+    pop == "samp_with_pain"
+  ) |>
+  mutate(
+    adjustment_lab = "Adjusted for equivalent earlier pain impact domain"
+  ) |>
+  make_gt_table(row_group_var = "adjustment_lab")
+```
+
+## Social support on later pain impact
+
+### Full sample
+
+```{r, echo=FALSE}
+results_clean |>
+  filter(
+    model_set == "support_on_painimpact",
+    outcome %in% outc_labs,
+    term %in% med_labs,
+    pop == "full_sample"
+  ) |>
+  mutate(
+    adjustment_lab = case_when(
+      adjustments == "no_mh" ~ "Adjusted for equivalent earlier pain impact",
+      adjustments == "dep" ~ "Adjusted for equivalent earlier pain impact + depressive symptoms",
+      adjustments == "anx" ~ "Adjusted for equivalent earlier pain impact + anxiety symptoms"
+    )) |>
+  make_gt_table(row_group_var = "adjustment_lab")
+```
+
+### Pain sample
+
+```{r, echo=FALSE}
+results_clean |>
+  filter(
+    model_set == "support_on_painimpact",
+    outcome %in% outc_labs,
+    term %in% med_labs,
+    pop == "samp_with_pain"
+  ) |>
+  mutate(
+    adjustment_lab = case_when(
+      adjustments == "no_mh" ~ "Adjusted for equivalent earlier pain impact",
+      adjustments == "dep" ~ "Adjusted for equivalent earlier pain impact + depressive symptoms",
+      adjustments == "anx" ~ "Adjusted for equivalent earlier pain impact + anxiety symptoms"
+    )) |>
+  make_gt_table(row_group_var = "adjustment_lab")
+```
+
+## Plot
+
+```{r regress-plt, echo=FALSE}
+# Legend labels
+adjustment_labs <- c(
+  baseline       = "Baseline confounders",
+  domain_hlthlim = "+ Equivalent health limitations (18y)",
+  selfc_spl_18   = "+ Health limits daily activities (18y)",
+  social_spl_18  = "+ Health limits social activities (18y)",
+  work_spl_18    = "+ Health limits work (18y)",
+  no_mh          = "+ Equivalent health limitations (18y)",
+  dep            = "+ Equivalent health limitations (18y) + Depressive symptoms (21y)",
+  anx            = "+ Equivalent health limitations (18y) + Anxiety symptoms (21y)"
+)
+
+# Plot data
+get_pltdf <- function(dat){
+  dat |>
+    filter(
+      term_type == "exposure",
+      model_set %in% c("hlthlim_on",
+                       "mh_on_painimpact",
+                       "mh_on_support",
+                       "support_on_painimpact")
+      ) %>%
+    mutate(
+      exposure = recode(exposure, !!!long_labs),
+      outcome = recode(outcome, !!!long_labs),
+      adjustments = recode(adjustments, !!!adjustment_labs)
+      ) %>%
+    mutate(
+      exposure = factor(exposure, levels = unique(exposure)),
+      outcome = factor(outcome, levels = unique(outcome)),
+      adjustments = factor(adjustments, levels = unique(unname(adjustment_labs)))
+    )
+}
+
+# Plot function
+regress_pltit <- function(df){
+  
+  pd <- position_dodge2(
+    width = 0.65,
+    preserve = "single",
+    padding = 0.15
+  )
+  
+  colours <- c("#999999","#CCBB44", "#D55E00","#4B0092","#0072B2", "#009E73", "#CC79A7", "#56B4E9")
+  names(colours) <- unname(adjustment_labs)
+
+  ggplot(df, aes(x = outcome, y = estimate, ymin = (estimate - 1.96 * std.error), ymax = (estimate + 1.96 * std.error), colour = adjustments, group = adjustments)) +
+    facet_grid(rows = vars(exposure), switch = "y") + #, scales = "free"
+    geom_hline(yintercept = 0, linetype = "dotted") +
+    geom_pointrange(
+      position = pd,
+      linewidth = 0.4,
+      size = 0.2
+    ) +
+    scale_y_continuous(position = "right", 
+                       name = "log(OR)\n", 
+                       sec.axis = dup_axis(name = "Term\n",  labels = NULL)) +
+    scale_color_manual(values = colours) +
+    theme_bw() +
+    theme(
+      legend.position = "bottom",
+      legend.location = "plot",
+      legend.key.width = unit(15, "pt"),
+      legend.spacing.y = unit(1, 'pt'),
+      legend.text = element_text(size = 8),
+      legend.title = element_text(size = 10),
+      text = element_text(size = 12), #, family = "Calibri"
+      axis.text.x = element_text(angle = 25, hjust = 1),
+      axis.ticks.y.left = element_blank(),
+      strip.background = element_blank(),
+      strip.placement = "outside",
+      strip.text = element_text(size = 10),
+      strip.text.y.left = element_text(angle = 0, hjust = 0)
+    ) +
+    labs(x = "\nOutcome", colour = "Adjustment : \n") +
+    guides(colour = guide_legend(title.position="top", ncol = 2)
+    )
+}
+```
+
+## Full sample
+
+```{r, echo=FALSE}
+regress_all_plt <- regress_pltit(get_pltdf(results_clean[results_clean$pop %in% "full_sample",]))
+
+regress_all_plt
+
+ggsave(plot = regress_all_plt, filename=paste0(path_to_outputs ,"regress_all_plt.jpg"), width = 8, height = 12, dpi = 350)
+```
+
+## Pain sample
+
+```{r, echo=FALSE}
+regress_wpain_plt <- regress_pltit(get_pltdf(results_clean[results_clean$pop %in% "samp_with_pain",]))
+
+regress_wpain_plt
+
+ggsave(plot = regress_wpain_plt, filename=paste0(path_to_outputs ,"regress_wpain_plt.jpg"), width = 8, height = 12, dpi = 350)
+```
+
+## Sex effects
+
+```{r, echo=FALSE}
+outcome_order <- c(exp_labs, intc_labs, med_labs, outc_labs)
+
+results_clean |>
+  filter(
+    pop %in% names(pop_labs),
+    model_set == "sex_as_exposure",
+    outcome %in% outcome_order
+  ) |>
+  mutate(
+    pop_lab = recode(pop, !!!pop_labs),
+    outcome_group = factor(
+      unname(long_labs[outcome]),
+      levels = unname(long_labs[outcome_order])
+    ),
+    term_lab = case_when(term == "sex" ~ "Sex")
+  ) |>
+  dplyr::select(
+    outcome_group,
+    term_lab,
+    pop_lab,
+    OR_CI,
+    p,
+    n
+  ) |>
+  pivot_wider(
+    names_from = pop_lab,
+    values_from = c(OR_CI, p, n),
+    names_glue = "{pop_lab}_{.value}"
+  ) |>
+  gt(
+    groupname_col = "outcome_group",
+    rowname_col = "term_lab"
+  ) |>
+  cols_label(
+    contains("OR_CI") ~ "OR (95% CI)",
+    contains("_p") ~ "p-value",
+    contains("_n") ~ "N"
+  ) |>
+  tab_spanner(
+    label = "Full sample",
+    columns = starts_with("Full sample_")
+  ) |>
+  tab_spanner(
+    label = "Sample with pain",
+    columns = starts_with("Sample with pain_")
+  ) |>
+  tab_style(
+    style = cell_text(style = "italic", weight = "bold"),
+    locations = cells_row_groups()
+  ) |>
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_spanners()
+  )
+```
+
+## Sex interaction tables
+
+```{r help-func-sexint, echo=FALSE}
+# Function to fit one model and extract interaction + stratified effects
+get_sex_int_results <- function(dat, pain_exp, outc, base = baseconf) {
+  
+  form <- reformulate(
+    termlabels = c(paste0("sex", "*", pain_exp), base),
+    response = outc
+  )
+  
+  mod <- glm(
+    formula = form,
+    family = binomial(link = "logit"),
+    data = dat
+  )
+
+  # Interaction term
+  
+  tidy_mod <- broom::tidy(mod)
+  
+  int_term <- tidy_mod |>
+    filter(str_detect(term, ":")) |>
+    pull(term)
+
+  int_res <- tidy_mod |>
+    filter(term == int_term) |>
+    transmute(
+      pain_exp = pain_exp,
+      outcome = outc,
+      estimate_id = "interaction",
+      estimate_label = "Sex:Health limitation interaction",
+      term = term,
+      OR = exp(estimate),
+      conf.low = exp(estimate - 1.96 * std.error),
+      conf.high = exp(estimate + 1.96 * std.error),
+      p.value = p.value
+    )
+  
+  # Sex-stratified pain effects
+  difference1 <- pain_exp
+  difference2 <- paste(pain_exp, int_term, sep = "+")
+  
+  effx0 <- lincom(mod, difference1, eform = T)
+  effx1 <- lincom(mod, difference2, eform = T)
+  
+  strat_res <- bind_rows(
+    as_tibble(effx0) |>
+      mutate(
+        pain_exp = pain_exp,
+        outcome = outc,
+        estimate_id = "strat1",
+        estimate_label = "Health limitation effect: Male",
+        term = difference1
+        ),
+    
+    as_tibble(effx1) |>
+      mutate(
+        pain_exp = pain_exp,
+        outcome = outc,
+        estimate_id = "strat2",
+        estimate_label = "Health limitation effect: Female",
+        term = difference2
+        )
+    ) |>
+    rename(
+      OR = Estimate,
+      conf.low = `2.5 %`,
+      conf.high = `97.5 %`,
+      p.value = `Pr(>Chisq)`
+      ) |>
+    dplyr::select(-Chisq)
+  
+  bind_rows(int_res, strat_res) |>
+    mutate(
+      OR_CI = sprintf("%.2f (%.2f, %.2f)", OR, conf.low, conf.high),
+      p = case_when(
+        p.value < 0.001 ~ "<0.001",
+        TRUE ~ sprintf("%.3f", p.value)
+        )
+    )
+}
+
+# Function to run across all pain exposures and later measures
+run_sex_int <- function(df, base = baseconf){
+  tidyr::expand_grid(
+    pain_exp = exp_labs,
+    outcome = c(intc_labs, med_labs, outc_labs)
+    ) |>
+    mutate(
+      res = map2(
+        pain_exp,
+        outcome,
+        ~ get_sex_int_results(
+          dat = df,
+          pain_exp = .x,
+          outc = .y,
+          base = base
+          )
+        )
+      ) |>
+    dplyr::select(-pain_exp, -outcome) |>
+    unnest(res) |>
+    mutate(
+      pain_exp_lab = factor(
+        unname(long_labs[pain_exp]),
+        levels = unname(long_labs[exp_labs])
+        ),
+      outcome_lab = factor(
+        unname(long_labs[outcome]),
+        levels = unname(long_labs[c(intc_labs, med_labs, outc_labs)])
+        )
+    )
+}
+
+# Function to produce wide gt table
+make_sex_int_table <- function(dat) {
+  
+  strat_labs <- dat |>
+    filter(str_detect(estimate_id, "^strat")) |>
+    distinct(estimate_id, estimate_label) |>
+    arrange(estimate_id)
+  
+  wide <- dat |>
+    dplyr::select(
+      pain_exp_lab,
+      outcome_lab,
+      estimate_id,
+      OR_CI,
+      p
+    ) |>
+    pivot_wider(
+      names_from = estimate_id,
+      values_from = c(OR_CI, p),
+      names_glue = "{estimate_id}_{.value}"
+    ) |>
+    arrange(pain_exp_lab, outcome_lab)
+  
+  gt_tab <- wide |>
+    gt(
+      rowname_col = "outcome_lab",
+      groupname_col = "pain_exp_lab"
+    ) |>
+    cols_label(
+      interaction_OR_CI = "OR (95% CI)",
+      interaction_p = "p-value"
+    ) |>
+    tab_spanner(
+      label = "Sex:pain impact interaction",
+      columns = c(interaction_OR_CI, interaction_p)
+    )
+  
+  # Add labels/spanners for each sex-stratified estimate
+  for (i in seq_len(nrow(strat_labs))) {
+    
+    id <- strat_labs$estimate_id[i]
+    lab <- strat_labs$estimate_label[i]
+    
+    gt_tab <- gt_tab |>
+      cols_label(
+        !!paste0(id, "_OR_CI") := "OR (95% CI)",
+        !!paste0(id, "_p") := "p-value"
+      ) |>
+      tab_spanner(
+        label = lab,
+        columns = all_of(c(
+          paste0(id, "_OR_CI"),
+          paste0(id, "_p")
+        ))
+      )
+  }
+  
+  gt_tab |>
+    tab_style(
+      style = cell_text(weight = "bold"),
+      locations = cells_column_spanners()
+    ) |>
+    tab_style(
+      style = cell_text(style = "italic", weight = "bold"),
+      locations = cells_row_groups()
+    )
+}
+```
+
+### Full sample
+
+#### Adjusted
+
+```{r, echo=FALSE}
+run_sex_int(alldf) |>
+  make_sex_int_table()
+```
+
+#### Unadjusted
+
+```{r, echo=FALSE}
+run_sex_int(alldf, base = NULL) |>
+  make_sex_int_table()
+```
+
+### Pain sample
+
+#### Adjusted
+
+```{r, echo=FALSE}
+run_sex_int(df_wpain) |>
+  make_sex_int_table()
+```
+
+#### Unadjusted
+
+```{r, echo=FALSE}
+run_sex_int(df_wpain, base = NULL) |>
+  make_sex_int_table()
+```
+
+
+# MEDIATION (GFORMULA) ESTIMATES
+
+```{r help-func-med, echo=FALSE}
+## Read in estimates
+load(paste0(path_to_outputs, "gformula_estimates.rda"))
+
+## Significant mediation effects
+#sig_gform_ests <- gform_ests[gform_ests$pop %in% 'all' & ((gform_ests$LCI < 1 & gform_ests$UCI < 1) | (gform_ests$LCI > 1 & gform_ests$UCI > 1)),]
+
+## Tidy labels
+gform_ests <- gform_ests %>%
+  mutate(
+    exposure = recode(exposure, !!!unlist(long_labs[exp_labs])),
+    outcome = recode(outcome, !!!unlist(long_labs[outc_labs])),
+    mediator = recode(mediator, !!!unlist(long_labs[med_labs])),
+    intconf = recode(intconf, 'none' = 'None', !!!unlist(long_labs[intc_labs]))
+    ) %>%
+  mutate(
+    mediator = factor(mediator, levels = c(long_labs[med_labs])),
+    intconf = factor(intconf, levels = c('None', long_labs[intc_labs]))
+    )
+
+## Functions to construct g-computation result tables
+get_gform_tab <- function(df, model_label) {
+  df %>%
+    dplyr::filter(intconf %in% model_label) %>%
+    dplyr::arrange(exposure, mediator) %>%
+    dplyr::select(effect, exposure, mediator, OR_LCI_UCI) %>%
+    mutate(Model = model_label) %>%
+    pivot_wider(
+      names_from = c(exposure, mediator),
+      values_from = OR_LCI_UCI,
+      values_fill = NA
+    )
+}
+
+comb_tabs <- function(df1, df2, df3){
+  combined_df <- bind_rows(df1, df2, df3)
+  combined_df <- combined_df %>% arrange(effect)
+  combined_df %>%
+    gt(groupname_col = "Model") %>%
+    tab_spanner_delim(delim = "_") %>%
+    cols_hide(columns = "Model") %>%
+    cols_label(effect = "Effect") %>%
+    tab_style(style = cell_text(weight = "bold"), 
+              locations = list(cells_column_spanners(),
+                               cells_column_labels(),
+                               cells_body(columns='effect'))) %>%
+    tab_style(style = cell_text(weight = "bold", style = "italic"), 
+              locations = cells_row_groups())
+}
+```
+
+### Full sample
+
+```{r, echo=FALSE}
+comb_tabs(
+  get_gform_tab(gform_ests[gform_ests$pop %in% "all",], 'None'),
+  get_gform_tab(gform_ests[gform_ests$pop %in% "all",], 'Higher depressive symptoms (21y)'),
+  get_gform_tab(gform_ests[gform_ests$pop %in% "all",], 'Higher anxiety symptoms (21y)')
+)
+```
+
+### Pain sample
+
+```{r, echo=FALSE}
+comb_tabs(
+  get_gform_tab(gform_ests[gform_ests$pop %in% "wpain",], 'None'),
+  get_gform_tab(gform_ests[gform_ests$pop %in% "wpain",], 'Higher depressive symptoms (21y)'),
+  get_gform_tab(gform_ests[gform_ests$pop %in% "wpain",], 'Higher anxiety symptoms (21y)')
+)
+```
+
+## Plot
+
+```{r gform-plt, echo=FALSE}
+## Function to plot gformula results
+gform_pltit <- function(df, ymin, ymax, brk){
+  pd <- position_dodge(0.6)
+  #df$mediator <- factor(df$mediator, levels = long_labs[med_labs], labels=long_labs[med_labs])
+  df$outcome <- factor(df$outcome, levels = long_labs[outc_labs], labels=c('Daily activities','Social activities','Work activities'))
+  ggplot(df, aes(x=effect, y=logOR, ymin=logLCI, ymax=logUCI, 
+                 colour=intconf, shape=intconf, #linetype=sexint,
+                 group=intconf)) +
+    geom_hline(yintercept = 0, linetype = "dotted") +
+    geom_errorbar(lwd=.8, width=.4, position = pd) +
+    geom_point(size=2.5, position = pd) +
+    facet_grid(rows = vars(mediator), cols = vars(outcome), switch = "y") + #, scales="free"
+    #scale_x_discrete(sec.axis = dup_axis(name = "Mediator\n", labels = NULL)) +
+    scale_y_continuous(position = "right", limits = c(ymin,ymax), breaks = seq(ymin,ymax,brk),
+                       sec.axis = dup_axis(name = "Mediator\n", labels = NULL)) +
+    scale_color_manual(values = c("#0072B2", "#4B0092", "#009E73")) +
+    #scale_linetype_manual(values=c(1,5)) +
+    theme_bw() +
+    theme(plot.title = element_text(hjust = 0.5, size = 14),
+          legend.position = "bottom", 
+          legend.location = "plot",
+          legend.text = element_text(size = 13), 
+          legend.title = element_text(size = 13),
+          text = element_text(size = 14), #, family = "Calibri"
+          strip.background = element_blank(),
+          strip.placement = "outside",
+          strip.text = element_text(size = 12)) +  
+    labs(x = "\nEffect", y = "log(OR)\n", title = "Outcome",
+         colour = "Intermediate confounder : ", shape = "Intermediate confounder : ") + #linetype = "Sex interaction : "
+    guides(colour = guide_legend(title.position="left", order = 1, nrow=1),  
+           #linetype = guide_legend(title.position="top", order = 2, nrow=3),
+           shape = guide_legend(title.position="left", order = 1, nrow=1))
+}
+```
+
+### Full sample
+
+```{r, echo=FALSE}
+gform_all_plt <- gform_pltit(gform_ests[!gform_ests$effect %in% 'PM' & gform_ests$pop %in% 'all',], ymin=-0.2,ymax=1.2,brk=0.2)
+
+gform_all_plt
+
+ggsave(plot = gform_all_plt, filename=paste0(path_to_outputs,"gform_all_plt.jpg"), width = 12, height = 15, dpi = 350)
+```
+
+### Pain sample
+
+```{r, echo=FALSE}
+gform_wpain_plt <- gform_pltit(gform_ests[!gform_ests$effect %in% 'PM' & gform_ests$pop %in% 'wpain',], ymin=-0.2,ymax=1.6,brk=0.2)
+
+gform_wpain_plt
+
+ggsave(plot = gform_wpain_plt, filename=paste0(path_to_outputs,"gform_wpain_plt.jpg"), width = 12, height = 15, dpi = 350)
+```
+
+
+# HISTOGRAMS
+
+```{r hist, echo=FALSE}
+# Continuous measures
+histlabs <- list('selfc_irt_18' = 'Health limits daily activities (18y)',
+                 'social_irt_18' = 'Health limits social activities (18y)',
+                 'work_irt_18' = 'Health limits work activities (18y)',
+                 'mfq_21' = 'Depressive symptoms (21y)',
+                 'gad_21' = 'Anxiety symptoms (21y)',
+                 'social_integration_sc_25' = 'Wider social network (25y)',
+                 'emo_supp_sc_25' = 'Higher emotional support (25y)',
+                 'prac_supp_sc_25' = 'Higher practical support (25y)',
+                 'covid_inpers_cont_adult' = 'In-person COVID contact (28y)',
+                 'covid4_dist_cont_adult' = 'Distant COVID contact (28y)',
+                 'o_daily_acts_30' = 'Pain impacts daily activities, no added zeroes (30y)', 
+                 'o_social_30' = 'Pain impacts social activities, no added zeroes (30y)', 
+                 'o_work_30' = 'Pain impacts work activities, no added zeroes (30y)',
+                 'o_daily_acts_30_zeros' = 'Pain impacts daily activities (30y)', 
+                 'o_social_30_zeros' = 'Pain impacts social activities (30y)', 
+                 'o_work_30_zeros' = 'Pain impacts work activities (30y)'
+)
+
+# Histogram function
+hist_pltit <- function(x, dat){
+  compdat <- dat[!is.na(dat[,x]),]
+  ggplot(compdat, aes(x = compdat[,x])) +
+    geom_density(color = "blue", linewidth = 1) +
+    geom_histogram(aes(y = after_stat(density)), bins = 30, 
+                   fill = "lightblue", color = "white", alpha = 0.9) +
+    theme_minimal() +
+    theme(text = element_text(size = 6)) + #, family = "Calibri"
+    labs(x = histlabs[x], y = "Density/Frequency")
+}
+hists_all <- lapply(names(histlabs), hist_pltit, alldf)
+hists_wpain <- lapply(names(histlabs), hist_pltit, df_wpain)
+```
+
+## Full sample
+
+```{r, echo=FALSE}
+hists_all <- ggarrange(plotlist=hists_all, ncol=4, nrow=4)
+
+hists_all
+
+ggsave(plot = hists_all, filename=paste0(path_to_outputs,"hist_all_plt.jpg"), width = 10, height = 10, dpi = 350)
+```
+
+## Pain sample
+
+```{r, echo=FALSE}
+hists_wpain <- ggarrange(plotlist=hists_wpain, ncol=4, nrow=4)
+
+hists_wpain
+
+ggsave(plot = hists_wpain, filename=paste0(path_to_outputs,"hist_wpain_plt.jpg"), width = 10, height = 10, dpi = 350)
+```
+
+
+# CORRELATION MATRICES
+
+## Analysis variables
+
+```{r, echo=FALSE}
+get_analys_corr <- function(dat){
+  vars <- tab_vars[!tab_vars %in% c('pain_more3mnths_18','pain_more3mnths_30')]
+  model.matrix(~0+., data=dat[,vars]) %>% 
+    cor(use="pairwise.complete.obs") %>%
+    ggcorrplot(show.diag=FALSE, type="lower", 
+               lab=TRUE, lab_size=2, tl.cex=10,
+               legend.title = "Correlation coefficient") +
+    theme(legend.position = "bottom")
+}
+```
+
+### Full sample
+
+```{r, echo=FALSE, warning=FALSE}
+get_analys_corr(alldf)
+
+ggsave(plot = get_analys_corr(alldf), filename=paste0(path_to_outputs,"corrmat_analys_all.jpg"), width = 8, height = 8, dpi = 350)
+```
+
+### Pain sample
+
+```{r, echo=FALSE, warning=FALSE}
+get_analys_corr(df_wpain)
+
+ggsave(plot = get_analys_corr(df_wpain), filename=paste0(path_to_outputs,"corrmat_analys_wpain.jpg"), width = 8, height = 8, dpi = 350)
+```
+
+## IRT variables
+
+```{r, echo=FALSE}
+# Items used in latent constructs of early pain impact and social support
+irt_vars <- c('sf36_sc_modacts_18' = 'Current health limits moderate activities', 
+              'sf36_sc_groceries_18' = 'Current health limits lifting or carrying groceries', 
+              'sf36_sc_onestair_18' = 'Current health limits climbing one flight of stairs', 
+              'sf36_sc_kneel_18' = 'Current health limits bending, kneeling or stooping', 
+              'sf36_sc_walkhlfmile_18' = 'Current health limits walking half a mile',
+              'sf36_sc_walk100m_18' = 'Current health limits walking one hundred metres', 
+              'sf36_sc_bathdress_18' = 'Current health limits bathing or dressing yourself',
+              'sf36_w_cuttime_18' = 'Cut down on amount of time spent on work or other activities as a result of physical health in past 4 weeks', 
+              'sf36_w_accomp_18' = 'Accomplished less than would like as a result of physical health in past 4 weeks', 
+              'sf36_w_limitkind_18' = 'Limited in kind of work or other activities as a result of physical health in past 4 weeks', 
+              'sf36_w_difficulty_18' = 'Had difficulty performing work or other activities as a result of physical health in past 4 weeks',
+              'sf36_s_amount_18' = 'Had problem with work or regular activities as a result of emotional respondent had problems in past 4 weeks: cut down on amount of time spent on work or other activities', 
+              'sf36_s_accomp_18' = 'Accomplished less than would like due to emotional problems', 
+              'sf36_s_lesscareful_18' = 'Did work or activities less carefully than usual due to emotional problems',
+              'sf36_s_extent_soc_18' = 'Extent physical health or emotional problems interfered with normal social activities with family, friends, neighbours, or groups in past 4 weeks', 
+              'sf36_s_amount_soc_18' = 'Amount of time respondents physical health or emotional problems interfered with social activities in past 4 weeks'
+)
+
+get_irt_corr <- function(dat){
+  model.matrix(~0+., data=dat[,names(irt_vars)]) %>% 
+  cor(use="pairwise.complete.obs") %>% 
+  ggcorrplot(show.diag=FALSE, type="lower", 
+             lab=TRUE, lab_size=2, tl.cex=10, 
+             legend.title = "Correlation coefficient") +
+  theme(legend.position = "bottom")
+}
+```
+
+### Full sample
+
+```{r, echo=FALSE, warning=FALSE}
+get_irt_corr(alldf)
+
+ggsave(plot = get_irt_corr(alldf), filename=paste0(path_to_outputs,"corrmat_irt_all.jpg"), width = 8, height = 8, dpi = 350)
+```
+
+### Pain sample
+
+```{r, echo=FALSE, warning=FALSE}
+get_irt_corr(df_wpain)
+
+ggsave(plot = get_irt_corr(df_wpain), filename=paste0(path_to_outputs,"corrmat_irt_wpain.jpg"), width = 8, height = 8, dpi = 350)
+```
+
+
+# PREDICTORS OF MISSINGNESS
+
+## Univariable
+
+```{r, echo=FALSE, warning=FALSE}
+cc_vars <- unique(c(outc_labs, exp_labs, intc_labs, med_labs, 'sex', baseconf))
+alldf$completecase <- as.integer(complete.cases(alldf[, cc_vars]))
+table(alldf$completecase)
+prop.table(table(alldf$completecase))
+
+tbl_uvregression(alldf[,c('completecase',cc_vars)], 
+                 y=completecase, 
+                 method=glm, 
+                 method.args = list(family = binomial(link = "logit")),
+                 exponentiate=T) %>%
+  as_gt()
+```
+
+## Multivariable
+
+```{r, echo=FALSE, warning=FALSE}
+# Function to fit models
+fit_multvmiss <- function(expos, outc){
+  form <- formula(paste('completecase ~',
+                        paste(c(outc, expos, med_labs, 'sex', 'm_homown_0'), collapse=' + ')))
+  glm(formula=form, 
+      data=alldf,
+      family=binomial(link = "logit"))
+}
+
+# Fit models
+mutlvmiss_mods <- list(
+  fit_multvmiss(exp_labs[1],outc_labs[1]),
+  fit_multvmiss(exp_labs[2],outc_labs[2]),
+  fit_multvmiss(exp_labs[3],outc_labs[3])
+)
+
+# Create tables
+mutlvmiss_tabs <- lapply(mutlvmiss_mods, function(mod) tbl_regression(mod, exponentiate=T))
+
+# Check Ns
+check_vars <- function(i) {
+  
+  vars <- c(exp_labs[i], outc_labs[i], med_labs, "sex", "m_homown_0")
+  cc <- complete.cases(alldf[, vars])
+  
+  tibble(
+    domain = c("Daily", "Social", "Work")[i],
+    exposure = exp_labs[i],
+    outcome = outc_labs[i],
+    n = sum(cc),
+    completecase_0 = sum(alldf$completecase[cc] == 0, na.rm = TRUE),
+    completecase_1 = sum(alldf$completecase[cc] == 1, na.rm = TRUE)
+  )
+}
+cc_check <- map_dfr(1:3, check_vars)
+cc_check$prop <- cc_check$completecase_0/cc_check$n
+
+# Merge tables
+tbl_merge(mutlvmiss_tabs,
+          tab_spanner = paste0('**',c("Daily (n = 712)",
+                                      "Social (n = 703)",
+                                      "Work (n = 706)"),'**')) %>%
+  modify_table_body(~.x %>% dplyr::arrange(match(variable, cc_vars))) %>%
+  as_gt() %>%
+  gt::tab_source_note(
+    source_note = gt::md(
+      "*Note.* The numbers of incomplete records observed in the above models are as follows: Daily = 159 (22%); Social = 150 (21%); Work = 153 (22%)"
+    )
+  )
+```

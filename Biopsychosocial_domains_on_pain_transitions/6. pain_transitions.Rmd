@@ -1,0 +1,416 @@
+---
+title: "Deriving pain transitions"
+author: "Alexandria Andrayas"
+date: "`r Sys.Date()`"
+output:
+  word_document:
+    toc: true
+#  html_document:
+#    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE)
+```
+
+# Load packages
+
+```{r packages, message=FALSE, echo=F}
+library(tidyverse)
+library(gt)
+library(labelled)
+library(gtsummary)
+library(ggalluvial)
+library(scales)
+```
+
+# Load and subset data and specify paths
+
+```{r data, echo=F}
+# Path to data
+path_to_data <- "//path/to/data/"
+
+# Path to outputs
+path_to_outputs <- "//path/to/outputs/"
+
+# Load dataset
+load(paste0(path_to_data,'clean_data.rda'))
+
+# Subset dataset to those with data on pain at ages 26 AND 30
+df <- alldf[!is.na(alldf$pain_status_26) & !is.na(alldf$pain_status_30),]
+
+# Load network scores
+load(paste0(path_to_data,"imp_netw_z_scs.rda"))
+
+# Covariates
+covariates <- c('sex','ethnicity','parent_sc_0', 'pain_prob_7','parent_pain_12')
+```
+
+# Variable labels
+
+```{r labs, echo=F}
+varlabs <- list(
+  'pain_status_26'='Pain status (26y)',
+  'pain_status_30'='Pain status (30y)'
+  )
+
+var_label(df[,names(varlabs)]) <- varlabs
+```
+
+# Pain transitions
+
+## Crosstab
+
+```{r x-tab, echo=FALSE}
+# Cross-tabulate
+ctab <- table(df$pain_status_26, df$pain_status_30)
+
+ctab_disp <- as.data.frame(ctab) %>%
+  tibble::as_tibble() %>%
+  dplyr::group_by(Var1) %>%
+  dplyr::mutate(
+    row_pct=Freq / sum(Freq),
+    cell   =sprintf("%d (%.1f%%)", Freq, 100 * row_pct)
+  ) %>%
+  dplyr::ungroup() %>%
+  dplyr::select(Var1, Var2, cell) %>%
+  tidyr::pivot_wider(
+    names_from =Var2,
+    values_from=cell
+  ) %>%
+  dplyr::rename(`Pain status at age 26`=Var1)
+
+ctab_disp %>%
+  gt() %>%
+  tab_spanner(
+    label="Pain status at age 30",
+    columns=-`Pain status at age 26`
+  ) %>%
+  cols_align(
+    align="left",
+    columns=`Pain status at age 26`
+  ) %>%
+  tab_style(
+    style=cell_text(weight="bold"),
+    locations=cells_column_labels(everything())
+  )
+```
+
+### Grouping
+
+```{r pain-trans-labs, echo=FALSE}
+ctab_df <- sapply(ctab_disp, as.character)
+
+transition_labs <- rbind(
+  c("No pain", "Acute", "Worsening", "Worsening"),
+  c("Acute", "Acute", "Worsening", "Worsening"),
+  c("Improving", "Improving", "Persisting, low impact", "Worsening"),
+  c("Improving", "Improving", "Improving", "Persisting, high impact")
+)
+
+ctab_df[1:4, 2:5] <- transition_labs
+
+ctab_df %>%
+  as.data.frame() %>%
+  gt() %>%
+  tab_spanner(
+    label='Pain status at age 30',
+    columns=-`Pain status at age 26`
+  ) %>%
+  cols_align(
+    align='right',
+    columns=`Pain status at age 26`
+  ) %>%
+  tab_style(
+    style=cell_text(weight='bold'),
+    locations=list(cells_column_labels(columns=`Pain status at age 26`),
+                     cells_column_spanners(spanners='Pain status at age 30')
+    )) %>%
+  tab_style(
+    style=cell_text(style='italic'),
+    locations=cells_body(
+      columns=-`Pain status at age 26`
+    ))
+```
+
+## Numbers
+
+```{r pain-trans-ns, echo=FALSE}
+# Function to derive pain transitions
+make_pain_transition_num <- function(p26, p30) {
+  
+  p26 <- as.character(p26)
+  p30 <- as.character(p30)
+  
+  case_when(
+    p26 == 'No pain' & p30 == 'No pain' ~ 1,
+    
+    p26 %in% c('No pain', 'Acute pain') &
+      p30 %in% c('No pain', 'Acute pain') ~ 2,
+    
+    p26 %in% c('Chronic pain, low impact', 'Chronic pain, high impact') &
+      p30 %in% c('No pain', 'Acute pain') ~ 3,
+    
+    p26 == 'Chronic pain, high impact' &
+      p30 == 'Chronic pain, low impact' ~ 3,
+    
+    p26 == 'Chronic pain, low impact' &
+      p30 == 'Chronic pain, low impact' ~ 4,
+    
+    p26 == 'Chronic pain, high impact' &
+      p30 == 'Chronic pain, high impact' ~ 5,
+    
+    p26 %in% c('No pain', 'Acute pain') &
+      p30 %in% c('Chronic pain, low impact', 'Chronic pain, high impact') ~ 6,
+    
+    p26 == 'Chronic pain, low impact' &
+      p30 == 'Chronic pain, high impact' ~ 6,
+    
+    TRUE ~ NA
+  )
+}
+
+# Create derived pain transition variable (in those with pain data at both timepoints)
+df$pain_transition_26to30 <- make_pain_transition_num(
+  df$pain_status_26,
+  df$pain_status_30
+)
+
+df$pain_transition_26to30 <- factor(df$pain_transition_26to30, levels=1:6, labels=c('No pain','Acute','Improving','Persisting, low impact','Persisting, high impact','Worsening'))
+
+# Assign label
+var_label(df$pain_transition_26to30) <- 'Pain transitions (from ages 26 to 30)'
+
+# Add pain transition variable to imputed network scores
+imp_netw_z_scs <- lapply(imp_netw_z_scs, function(x){
+  out <- bind_cols(x, 'pain_transition_26to30' = df$pain_transition_26to30)
+  out
+})
+
+# Add covariates to imputed network scores
+imp_netw_z_scs <- lapply(imp_netw_z_scs, function(x){
+  out <- bind_cols(x, df[,covariates])
+  out
+})
+
+save(imp_netw_z_scs, file=paste0(path_to_data,"imp_netw_z_scs.rda")
+```
+
+## Pain state and transitions table
+
+```{r pain-states, echo=FALSE}
+pain_st_trans_tab <- tbl_merge(
+  tbls = list(
+    tbl_summary(
+      df,
+      include = c("pain_status_26", "pain_status_30", "pain_transition_26to30")
+    ) %>%
+      italicize_levels() %>%
+      modify_header(stat_0 ~ "**Overall**  \nN = {N}"),
+    
+    tbl_summary(
+      df,
+      include = c("sex", "pain_status_26", "pain_status_30", "pain_transition_26to30"),
+      by = "sex"
+    ) %>%
+      italicize_levels() %>%
+      add_p()
+  ),
+  tab_spanner = FALSE
+) %>% 
+  as_gt() 
+
+pain_st_trans_tab
+
+pain_st_trans_tab %>% gtsave(filename=paste0(path_to_outputs,"pain_st_trans_tab.docx"))
+```
+
+## Alluvial plot
+
+```{r pain-states, echo=FALSE}
+raw_state_levels <- c(
+  "No pain",
+  "Acute pain",
+  "Chronic pain, low impact",
+  "Chronic pain, high impact"
+)
+
+state_levels <- c(
+  "No pain",
+  "Acute pain",
+  "Chronic low-impact",
+  "Chronic high-impact"
+)
+
+cols <- c(
+  "No pain" = "#E69F00",
+  "Acute pain" = "#56B4E9",
+  "Chronic low-impact" = "#009E73",
+  "Chronic high-impact" = "#CC79A7"
+)
+
+# transition counts
+pain_flow <- df %>%
+  filter(!is.na(pain_status_26), !is.na(pain_status_30)) %>%
+  count(
+    pain_status_26 = factor(pain_status_26, levels = raw_state_levels, labels = state_levels),
+    pain_status_30 = factor(pain_status_30, levels = raw_state_levels, labels = state_levels),
+    name = "n"
+  )
+
+# totals for percentages
+n_total <- sum(pain_flow$n)
+
+age26_totals <- pain_flow %>%
+  group_by(pain_status_26) %>%
+  summarise(n_origin = sum(n), .groups = "drop")
+
+age30_totals <- pain_flow %>%
+  group_by(pain_status_30) %>%
+  summarise(n_dest = sum(n), .groups = "drop")
+
+# base alluvial plot
+base_plt <- ggplot(pain_flow, aes(axis1 = pain_status_26, axis2 = pain_status_30, y = n)) +
+  geom_alluvium(
+    aes(fill = pain_status_26),
+    alpha = 0.70, width = 0.1, knot.pos = 0.4, 
+    colour = "white", linewidth = 0.15, discern = TRUE
+  ) +
+  geom_stratum(
+    width = 0.1, fill = "white", linewidth = 0.6, colour = 'white', discern = TRUE
+  )
+
+# actual stratum positions from built plot
+strata_pos <- ggplot_build(base_plt)$data[[2]] %>%
+  transmute(
+    x,
+    state = case_when(
+      x == 2 ~ str_remove(as.character(stratum), "\\.1$"),
+      TRUE   ~ as.character(stratum)
+    ),
+    state = factor(state, levels = state_levels),
+    ymin, ymax,
+    ymid = (ymin + ymax) / 2
+  )
+
+age26_pos <- strata_pos %>% filter(x == 1)
+age30_pos <- strata_pos %>% filter(x == 2)
+
+# left-side headers: age-26 state labels
+left_headers <- age26_pos %>%
+  left_join(age26_totals, by = c("state" = "pain_status_26")) %>%
+  mutate(header = paste0(state, " (n = ", comma(n_origin), ")"))
+
+# right-side transition labels: count + % within age-26 state
+right_labs <- pain_flow %>%
+  left_join(age26_totals, by = "pain_status_26") %>%
+  group_by(pain_status_30) %>%
+  arrange(desc(match(pain_status_26, state_levels)), .by_group = TRUE) %>%
+  mutate(y_within = cumsum(n) - n / 2) %>%
+  ungroup() %>%
+  left_join(age30_pos %>% select(state, ymin), by = c("pain_status_30" = "state")) %>%
+  mutate(
+    y = ymin + y_within,
+    label = paste0(comma(n), " (", percent(n / n_origin, accuracy = 1), ")")
+  )
+
+# right-side headers: age-30 state labels
+right_headers <- age30_pos %>%
+  left_join(age30_totals, by = c("state" = "pain_status_30")) %>%
+  mutate(header = state_levels[match(state, state_levels)])
+
+# right brackets
+bracket_gap <- 20  
+
+right_brackets <- age30_pos %>%
+  mutate(
+    y0 = ymin + if_else(ymin > 0, bracket_gap / 2, 0),
+    y1 = ymax - if_else(ymax < n_total, bracket_gap / 2, 0),
+    x = 2.16,
+    tick = -0.02
+  )
+
+# updated plot
+alluv_plt <- base_plt +
+  geom_text(
+    data = left_headers,
+    aes(x = "Age 26", y = ymid, label = header),
+    inherit.aes = FALSE,
+    position = position_nudge(x = 0),
+    hjust = 1,
+    size = 8, size.unit = "pt",
+    colour = "grey20"
+  ) +
+  geom_label(
+    data = right_labs,
+    aes(x = "Age 30", y = y, label = label),
+    inherit.aes = FALSE,
+    position = position_nudge(x = -0.045),
+    hjust = 0,
+    size = 8, size.unit = "pt",
+    colour = "grey30",
+    fill = "white",
+    linewidth = 0,
+    label.padding = unit(0.08, "lines")
+  ) + 
+  geom_segment(
+    data = right_brackets,
+    aes(x = x, xend = x, y = y0, yend = y1),
+    inherit.aes = FALSE,
+    colour = "grey45",
+    linewidth = 0.4
+    ) +
+  geom_segment(
+    data = right_brackets,
+    aes(x = x, xend = x + tick, y = y0, yend = y0),
+    inherit.aes = FALSE,
+    colour = "grey45",
+    linewidth = 0.4
+    ) +
+  geom_segment(
+    data = right_brackets,
+    aes(x = x, xend = x + tick, y = y1, yend = y1),
+    inherit.aes = FALSE,
+    colour = "grey45",
+    linewidth = 0.4
+    ) +
+  geom_text(
+    data = right_headers,
+    aes(x = "Age 30", y = ymid, label = header),
+    inherit.aes = FALSE,
+    position = position_nudge(x = 0.2),
+    hjust = 0,
+    size = 8, size.unit = "pt",
+    colour = "grey20",
+    lineheight = 0.5
+  ) +
+  scale_x_discrete(
+    limits = c("Age 26", "Age 30"),
+    expand = expansion(add = c(0.2, 0.15))
+  ) +
+  scale_y_continuous(
+    expand = expansion(mult = c(0.02, 0.01))
+  ) +
+  scale_fill_manual(values = cols) +
+  coord_cartesian(clip = "off") +
+  labs(x = NULL, y = NULL, fill = "Pain state at age 26:  ") +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 8, colour = "grey30"),
+    legend.position = "bottom",
+    legend.box.margin = margin(t = 20),
+    legend.title = element_text(size = 8),
+    legend.text = element_text(size = 8),
+    plot.margin = margin(5, 80, 5, 60)
+  )
+
+alluv_plt
+
+ggsave(plot=alluv_plt, filename=paste0(path_to_outputs,"alluv_plt.png"), width=174, height=194, units="mm", dpi=350)
+```

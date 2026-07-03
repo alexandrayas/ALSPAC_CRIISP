@@ -1,0 +1,444 @@
+---
+title: "Redundancies in biopsychosocial variables"
+author: "Alexandria Andrayas"
+date: "`r Sys.Date()`"
+output:
+  word_document:
+    toc: true
+#  html_document:
+#    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE)
+```
+
+# Load packages
+
+```{r packages, message=FALSE, echo=F}
+library(labelled)
+library(sticky)
+library(polycor)
+library(pheatmap)
+library(EGAnet)
+library(tidyverse)
+library(mice)
+library(gt)
+```
+
+# Load and subset data and specify paths
+
+```{r data, echo=F}
+# Load dataset
+load('//path/to/data/clean_data.rda')
+
+# Subset dataset to those with data on pain at ages 26 AND 30
+df <- alldf[!is.na(alldf$pain_status_26) & !is.na(alldf$pain_status_30),]
+
+# Path to outputs
+path_to_outputs <- "//path/to/outputs/"
+```
+
+# Variable labels
+
+```{r labs, echo=F}
+# List of long variable names
+varlabs <- list(
+  'aln'='Pregnancy identifier',
+  'qlet'='Birth order (within pregnancy)',
+  'sex'='Sex assigned at birth', 
+  'ethnicity'='Ethnicity',
+  'parent_sc_0' = 'Highest parental social class at birth',
+  'pain_prob_7' = 'Pain problem in childhood (7y)',
+  'parent_pain_12' = 'Parental pain (12y)',
+  'sf12_sr_hlth_22'='SF-12: Self-rated health (22y)',
+  'sf12_hlth_limt_mod_act_22'='SF-12: Health limits moderate activities (22y)',
+  'sf12_ph_accomp_less_22'='SF-12: Freq. accomplished less due to physical health (22y)', 
+  'sf12_emo_limt_wrk_act_22'='SF-12: Freq. work/activities limited by emotions (22y)',
+  'sf12_calm_peace_22'='SF-12: Freq. felt calm and peaceful (22y)',
+  'sf12_energy_22'='SF-12: Freq. had lot of energy (22y)',
+  'sf12_limt_soc_act_22'='SF-12: Freq. health/emotions interfered with social activities (22y)',
+  'wellbeing_sc_23'='Warwick-Edinburgh Mental Wellbeing Scale score (23y)', 
+  'subj_happy_sc_23'='Subjective Happiness Scale score (23y)',
+  'life_satis_sc_23'='Life Satisfaction Scale score (23y)',
+  'meaning_life_presc_sc_23'='Meaning in Life Questionnaire: Presence score (23y)',
+  'meaning_life_search_sc_23'='Meaning in Life Questionnaire: Search score (23y)',
+  'basic_psych_needs_auton_sc_23'='BPNSS: Autonomy score (23y)', 
+  'basic_psych_needs_compet_sc_23'='BPNSS: Competence score (23y)', 
+  'basic_psych_needs_relat_sc_23'='BPNSS: Relatedness score (23y)',
+  'gratitude_sc_23'='Gratitude Questionnaire score (23y)',
+  'optimism_sc_23'='Life Orientation Test-Revised Optimism score (23y)',
+  'smfq_sc_23'='Short Moods and Feelings Questionnaire score (23y)',
+  'cisr_mild_depres_24'='CIS-R: Depression (24y)',
+  'cisr_general_anxiety_24'='CIS-R: Generalised anxiety disorder (24y)',
+  'scaared_total_25'='SCAARED: Total score (25y)', 
+  'sapas_personality_dis_sc_24'='SAPAS: Total score (24y)',  
+  'supps_neg_urg_24'='S-UPPS-P: Negative Urgency (24y)',
+  'supps_pos_urg_24'='S-UPPS-P: Positive Urgency (24y)',
+  'supps_lack_premed_24'='S-UPPS-P: Lack of Premeditation (24y)',
+  'supps_lack_persev_24'='S-UPPS-P: Lack of Perseverance (24y)',
+  'supps_sens_seek_24'='S-UPPS-P: Sensation Seeking (24y)',
+  'sdq_prosocial_25'='SDQ: Prosocial behavior (25y)',
+  'sdq_emotional_25'='SDQ: Emotional symptoms (25y)',
+  'sdq_conduct_25'='SDQ: Conduct problems (25y)',
+  'sdq_hyperact_25'='SDQ: Hyperactivity/inattention (25y)',
+  'sdq_peer_25'='SDQ: Peer relationship problems (25y)',
+  'aq_social_skill_sc_25'='AQ: Social Skills (25y)',
+  'aq_attention_switch_sc_25'='AQ: Attention Switching (25y)',
+  'aq_attention_detail_sc_25'='AQ: Attention to Detail (25y)',
+  'aq_communication_sc_25'='AQ: Communication (25y)',
+  'aq_imagination_sc_25'='AQ: Imagination (25y)',
+  'ari_affect_react_sc_25'='ARI: Total Score (25y)',
+  'atsrs_emo_support_sc_25'='ATSRS: Emotional support (25y)',
+  'atsrs_prac_support_sc_25'='ATSRS: Instrumental support (25y)',
+  'work_mem_24'='Working memory: N-back d prime (24y)',
+  'resp_inhib_24'='Response inhibition: Stop-Signal reaction time, ms (24y)', 
+  'screen_time_22'='Hours per day spent using screens on average (22y)',
+  'outdoor_time_22'='Hours per day spent outdoors on average (22y)',
+  'actv_jrnys_22'='Regular walking/cycling journeys (22y)',
+  'vigact_freq_22'='Freq. taking part in strenuous/vigorous activity (22y)',
+  'eat_conscious_25'='Conscious of what they are eating (25y)',
+  'n_hrs_sleep_25'='Number of hours sleeps in 24 hours (25y)', 
+  'enough_sleep_25'='Frequency gets enough sleep (25y)', 
+  'daytime_tired_25' = 'Problem with sleepiness during day time activities (25y)',
+  'smk_vape_cannabis_24'='Nicotine or cannabis use (24y)',
+  'bing_drink_24'='Binge drinking (24y)',
+  'n_illict_drugs_24'='Number of illicit drugs ever used (24y)', 
+  'antisocialb_22'='Anti-social behaviour (22y)',
+  'n_siblings_23'='Number of siblings (23y)',
+  'n_friends_24'='Number of close friends (24y)',
+  'freq_see_parents_25'='Frequency sees parents (25y)',
+  'socmed_freq_24'='Social media use frequency (24y)',
+  'parent_25'='Is a parent (25y)',
+  'partner_25'='Has a partner (25y)',
+  'lives_alone_25'='Lives alone (25y)',
+  'volunteer_22'='Doing volunteer work (22y)',
+  'inedu_22'='In part-/full-time education (22y)',
+  'income_25'='Take-home pay each month (25y)',
+  'job_shift_nights_25'='Has job that involves shift work or night shifts (25y)',
+  'n_jobs_school_25' = 'Number of jobs had since leaving school (25y)',
+  'financ_prob_25'='Had big financial problems past year (25y)',
+  'bullied_23'='Bullied, past 6 months (23y)',
+  'feltlov_grwup_23'='Felt loved growing up (23y)',
+  'feltlov_relat_23'='Felt loved by a partner since 16 (23y)',
+  'relationship_abuse_23' = 'Relationship abuse since 16 (23y)',
+  'childh_maltreat_23' = 'Childhood maltreatment growing up (23y)',
+  'serious_accident_fire_23'='Ever been in a serious accident or fire (23y)',
+  'death_somclos_23'='Unexpected death of someone close (23y)',
+  'bad_exps_24'='Bad experience in past year (24y)',
+  'selfharm_24'='Self-harm history (24y)',
+  'lean_mass_ind_24'='Lean mass index (24y)',
+  'bmi_24'='Body Mass Index (24y)',
+  'heartrate_24'='Heart Rate average, bpm (24y)',
+  'grip_strength_24'='Maximum hand grip strength (24y)',
+  'log_crp_24'='C-Reactive Protein, mg/l log-transformed (24y)',
+  'il6_24'='Interleukin-6,NPX values log2 scale (24y)',
+  'nlr_24' = 'Neutrophil-to-Lymphocyte Ratio (24y)',
+  'wbc_24' = 'White blood cell count 10^9/L (24y)',
+  'log_insulin_24' = 'Insulin uU/mL log-transformed (24y)',
+  'log_triglycerides_24'='Triglycerides mmol/L log-transformed (24y)',
+  'aches_sickness_25' = 'Regular headaches, stomach-aches or sickness (25y)',
+  'gp_visits_24'='GP visits about own health, past year (24y)',
+  'longst_ill_disab_24'='Long-standing illness/disability/infirmity (24y)', 
+  'urbrur_24'='Urban/rural indicator (24y)',
+  'imdq_24'='IMD Neighbourhood deprivation, quintiles (24y)',
+  'townsendq_24'='Townsend deprivation score, quintiles (24y)',
+  'pain_status_18' = 'Pain status (18y)',
+  'pain_status_26'='Pain status (26y)',
+  'pain_status_30'='Pain status (30y)'
+  )
+#names(varlabs)[!names(varlabs) %in% colnames(df)]
+#colnames(df)[!colnames(df) %in% names(varlabs)]
+```
+
+# Tidy and check dataset 
+
+```{r clean, echo=F}
+# Subset dataset to only include IDs, demographics, multidomain exposure items and pain outcomes
+df <- df[,names(varlabs)]
+
+# Exclude IDs, confounders and outcomes
+non_exp_vars <- c("aln", "qlet",
+                  'sex','ethnicity','parent_sc_0',
+                  'pain_prob_7','parent_pain_12', 
+                  'pain_status_18', 'pain_status_26', 'pain_status_30')
+
+# Covariates
+covariates <- c('sex','ethnicity','parent_sc_0', 'pain_prob_7','parent_pain_12')
+
+# Number of exposure items initially included in EGA
+analy_vars <- colnames(df)[!colnames(df) %in% non_exp_vars]
+
+# Assign labels
+var_label(df) <- varlabs[colnames(df)]
+
+# Persist label attributes
+df <- sticky_all(df)
+```
+
+# Correlations (pairwise complete cases)
+
+## Heterogeneous correlation matrix (using pheatmap)
+
+```{r corr-pheatmap, out.width='100%', message=F, warning=F, echo=F, dpi=300, fig.height=10, fig.width=12}
+#Heterogeneous correlation matrix (pairwise complete)
+het_corr <- hetcor(df[,analy_vars], ML=FALSE, std.err=FALSE, use='pairwise.complete.obs')
+
+#Draw clustered heatmap
+pheatmap(
+  het_corr$correlations,
+  color=colorRampPalette(c('blue','white','red'))(50),
+  clustering_distance_rows='correlation',
+  clustering_distance_cols='correlation',
+  clustering_method='average',
+  fontsize_row=5, fontsize_col=6, angle_col=45, main=NA
+)
+```
+
+## Screen sparse pairwise tables
+
+```{r screen-sparse, echo=F}
+#Get binary/categorical
+cat_vars <- analy_vars[sapply(df[,analy_vars], function(x) is.factor(x) || is.character(x))]
+
+#Check pairwise tables for sparse cells
+sparse_pair_cells <- function(dat, vars) {
+  
+  pairs <- combn(vars, 2, simplify = FALSE)
+  
+  res <- lapply(pairs, function(p) {
+    
+    x <- dat[[p[1]]]
+    y <- dat[[p[2]]]
+    
+    tab <- table(x,y)
+    
+    data.frame(
+      var1 = p[1],
+      var2 = p[2],
+      n_pair = sum(tab),
+      min_cell = min(tab),
+      min_positive_cell = min(tab[tab > 0]),
+      zero_cells = sum(tab == 0)
+    )
+  })
+  
+  out <- do.call(rbind, res)
+  dplyr::arrange(out, min_cell, min_positive_cell)
+}
+
+spars_cells <- sparse_pair_cells(df, cat_vars)
+head(spars_cells, 20)
+```
+
+## Using auto.correlate from EGAnet
+
+```{r corr-eganet, out.width='100%', message=F, warning=F, echo=F, dpi=300, fig.height=10, fig.width=12}
+auto_corrs <- auto.correlate(df[,analy_vars])
+long_auto_corrs <- as.data.frame(as.table(auto_corrs))
+
+ggplot(long_auto_corrs, aes(x=Var2, y=Var1)) + 
+  geom_raster(aes(fill=Freq)) + 
+  scale_fill_gradient2(low="#5D3A9B", mid="#FFFFFF", high="#E69F00") + 
+  theme(axis.title  =element_blank(),
+        axis.text.x =element_text(size=5, angle=45, hjust=1),
+        axis.text.y =element_text(size=5),
+        legend.title=element_blank())
+```
+
+# Load imputed data
+
+```{r load-imp-dat}
+# Load imputed data
+load('//path/to/data/mult_pain_imp_all.rda')
+```
+
+# Determine redundancies
+
+```{r imp-uvas, warning=F}
+# Run UVA and keep the full outputs
+get_imp_uva <- function(imp_data, variables) {
+  n_imputations <- imp_data$m
+  uva_list <- vector('list', n_imputations)
+  for(i in 1:n_imputations) {
+    complete_data <- complete(imp_data, i)[,variables]
+    set.seed(2025)#set.seed(seed + i)  # avoid identical tie-breaking across imputations??
+    uva_list[[i]] <- UVA(data=complete_data)
+  }
+  return(uva_list)
+} 
+uva_list <- get_imp_uva(imp_all, analy_vars)
+```
+
+## Review redundancies
+
+```{r review-redundancies, warning=F}
+# Tidy UVA redundancy output across imputed datasets
+uva_sets_long <- imap_dfr(uva_list, function(uva_obj, imp_id) {
+  
+  # UVA redundant sets: names are the retained/preferred variable,
+  # values are variables considered redundant with it
+  red <- uva_obj$redundant
+  
+  # Variables UVA recommends removing in this imputation
+  remove_vars <- uva_obj$keep_remove$remove
+  
+  # Convert each UVA entry into a full redundancy set
+  sets <- Map(
+    function(kept_var, redundant_vars) unique(c(kept_var, redundant_vars)),
+    names(red),
+    red
+  )
+  
+  tibble(
+    imputation = imp_id,
+    items = sets
+  ) %>%
+    mutate(
+      n_items = map_int(items, length),
+      removed = map(items, ~ intersect(.x, remove_vars)),
+      kept = map(items, ~ setdiff(.x, remove_vars)),
+      signature = map_chr(items, ~ paste(sort(.x), collapse = " | "))
+    )
+})
+
+# Pair frequencies 
+uva_pair_freq <- uva_sets_long %>% 
+  filter(n_items >= 2) %>% 
+  mutate(pairs = map(items, ~ combn(sort(.x), 2, simplify = FALSE))) %>% 
+  unnest_longer(pairs) %>% 
+  transmute(imputation, 
+            var1 = map_chr(pairs, 1), 
+            var2 = map_chr(pairs, 2) ) %>% 
+  distinct(imputation, var1, var2) %>% # avoid double-counting within an imputation 
+  count(var1, var2, sort = TRUE) %>% 
+  mutate(prop = n / length(uva_list))
+
+# Main UVA review table - how often each redundancy set appears & which variable UVA most often keeps from that set
+set_summary <- uva_sets_long %>%
+  filter(n_items >= 2) %>%
+  distinct(imputation, signature, .keep_all = TRUE) %>%
+  group_by(signature, n_items) %>%
+  summarise(
+    set_n = n(),
+    set_prop = set_n / length(uva_list),
+    items = list(first(items)),
+    .groups = "drop"
+  )
+
+kept_summary <- uva_sets_long %>%
+  filter(n_items >= 2) %>%
+  unnest(kept) %>%
+  count(signature, kept, name = "kept_n") %>%
+  group_by(signature) %>%
+  mutate(kept_prop = kept_n / sum(kept_n)) %>%
+  slice_max(kept_prop, n = 1, with_ties = TRUE) %>%
+  ungroup()
+
+uva_review <- set_summary %>%
+  left_join(kept_summary, by = "signature") %>%
+  arrange(desc(set_prop), desc(kept_prop))
+
+uva_review
+
+# Final redundancy decisions - Remove variables from robust redundancy sets, keeping the variable UVA most often retained.
+redundancy_decisions <- uva_review %>%
+  filter(set_prop >= 0.80) %>%
+  mutate(remove = map2(items, kept, ~ setdiff(.x, .y))) %>%
+  select(signature, set_prop, kept, kept_prop, remove) %>%
+  unnest(remove) %>%
+  rename(remove_var = remove)
+
+redundant_vars <- redundancy_decisions %>%
+  pull(remove_var) %>%
+  unique()
+
+save(redundant_vars, file=paste0(path_to_outputs,'redundant_vars.rda'))
+```
+
+## Redundancies table
+
+```{r review-redundancies, warning=F}
+redundancy_table <- redundancy_decisions %>%
+  left_join(
+    uva_review %>% 
+      select(signature, set_n, kept_n),
+    by = "signature"
+  ) %>%
+  mutate(
+    removed_label = unname(varlabs[remove_var]),
+    kept_label    = unname(varlabs[kept]),
+    
+    reasoning = case_when(
+      
+      remove_var == "atsrs_prac_support_sc_25" ~
+        "Practical support overlapped with living arrangement across most imputations. Lives alone was retained, although this may need substantive review because the constructs are not identical.",
+      
+      remove_var == "enough_sleep_25" ~
+        "Both variables capture sleep quantity/adequacy. Hours of sleep was retained consistently and provides the more direct measure.",
+      
+      remove_var %in% c("imdq_24", "urbrur_24") ~
+        "Neighbourhood/contextual measures were redundant across all imputations. Townsend quintile was retained as the representative area-level deprivation measure.",
+      
+      remove_var == "n_illict_drugs_24" ~
+        "Both variables capture substance-use propensity. The broader smoking/vaping/cannabis measure was retained and captured the shared signal.",
+      
+      remove_var == "supps_lack_premed_24" ~
+        "Both variables capture related impulsivity facets. Lack of perseverance was retained consistently, suggesting premeditation added little unique information.",
+
+      remove_var == "sf12_limt_soc_act_22" ~
+        "These SF-12 role/social interference items were highly overlapping. Work/activities limited by emotions was retained in almost all imputations.",
+      
+      remove_var == "sf12_hlth_limt_mod_act_22" ~
+        "Both variables reflect physical limitation. Frequency accomplished less due to physical health was retained more often.",
+      
+      remove_var == "nlr_24" ~
+        "Both variables capture inflammatory signal. WBC was retained more often, though the kept choice was less stable than for other redundancy sets.",
+    
+      remove_var %in% c("scaared_total_25", "aches_sickness_25") ~
+        "This set reflects internalising/somatic distress. SDQ emotional symptoms was retained consistently as the representative variable.",
+    
+      remove_var == "ari_affect_react_sc_25" ~
+        "Affective reactivity overlapped strongly with broader behavioural/emotional dysregulation indexed by SDQ conduct problems."
+  ),
+      
+    review_note = case_when(
+      kept_prop < 0.80 ~ "Review: kept choice less stable",
+      remove_var == "atsrs_prac_support_sc_25" ~ "Review: conceptually distinct"
+    )
+  ) %>%
+  select(
+    removed_label,
+    kept_label,
+    set_prop,
+    kept_prop,
+    reasoning
+  ) %>%
+  arrange(desc(set_prop), removed_label)
+
+redundancy_gt <- redundancy_table %>%
+  gt() %>%
+  cols_label(
+    removed_label = "Redundant variable removed",
+    kept_label    = "Overlapping variable(s) kept",
+    set_prop      = "Set frequency",
+    kept_prop     = "Kept consistency",
+    reasoning     = "Reasoning"
+  ) %>%
+  fmt_percent(
+    columns = c(set_prop, kept_prop),
+    decimals = 0
+  ) %>%
+  tab_footnote(
+    footnote = "Proportion of imputed datasets in which the same group of variables was identified as redundant.",
+    locations = cells_column_labels(columns = set_prop)
+  ) %>%
+  tab_footnote(
+    footnote = "Proportion of those redundancy sets in which the listed variable was retained as the representative variable.",
+    locations = cells_column_labels(columns = kept_prop)
+  )
+
+redundancy_gt %>% gtsave(filename=paste0(path_to_outputs,"redundancies_tab.docx"))
+```

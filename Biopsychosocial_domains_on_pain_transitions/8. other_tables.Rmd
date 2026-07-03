@@ -1,0 +1,362 @@
+---
+title: "Other tables"
+author: "Alexandria Andrayas"
+date: "`r Sys.Date()`"
+output:
+  word_document:
+    toc: true
+#  html_document:
+#    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE)
+```
+
+# Load packages and set paths
+
+```{r packages, message=FALSE, echo=F}
+library(tidyverse)
+library(gt)
+
+path_to_outputs <- "//path/to/outputs/"
+```
+
+# Variable labels
+
+```{r labs, echo=F}
+# List of long variable names
+varlabs <- list(
+  'aln'='Pregnancy identifier',
+  'qlet'='Birth order (within pregnancy)',
+  'sex'='Sex assigned at birth', 
+  'ethnicity'='Ethnicity',
+  'parent_sc_0' = 'Highest parental social class at birth',
+  'pain_prob_7' = 'Pain problem in childhood (7y)',
+  'parent_pain_12' = 'Parental pain (12y)',
+  'sf12_sr_hlth_22'='SF-12: Self-rated health (22y)',
+  'sf12_hlth_limt_mod_act_22'='SF-12: Health limits moderate activities (22y)',
+  'sf12_ph_accomp_less_22'='SF-12: Freq. accomplished less due to physical health (22y)', 
+  'sf12_emo_limt_wrk_act_22'='SF-12: Freq. work/activities limited by emotions (22y)',
+  'sf12_calm_peace_22'='SF-12: Freq. felt calm and peaceful (22y)',
+  'sf12_energy_22'='SF-12: Freq. had lot of energy (22y)',
+  'sf12_limt_soc_act_22'='SF-12: Freq. health/emotions interfered with social activities (22y)',
+  'wellbeing_sc_23'='Warwick-Edinburgh Mental Wellbeing Scale score (23y)', 
+  'subj_happy_sc_23'='Subjective Happiness Scale score (23y)',
+  'life_satis_sc_23'='Life Satisfaction Scale score (23y)',
+  'meaning_life_presc_sc_23'='Meaning in Life Questionnaire: Presence score (23y)',
+  'meaning_life_search_sc_23'='Meaning in Life Questionnaire: Search score (23y)',
+  'basic_psych_needs_auton_sc_23'='BPNSS: Autonomy score (23y)', 
+  'basic_psych_needs_compet_sc_23'='BPNSS: Competence score (23y)', 
+  'basic_psych_needs_relat_sc_23'='BPNSS: Relatedness score (23y)',
+  'gratitude_sc_23'='Gratitude Questionnaire score (23y)',
+  'optimism_sc_23'='Life Orientation Test-Revised Optimism score (23y)',
+  'smfq_sc_23'='Short Moods and Feelings Questionnaire score (23y)',
+  'cisr_mild_depres_24'='CIS-R: Depression (24y)',
+  'cisr_general_anxiety_24'='CIS-R: Generalised anxiety disorder (24y)',
+  'scaared_total_25'='SCAARED: Total score (25y)', 
+  'sapas_personality_dis_sc_24'='SAPAS: Total score (24y)',  
+  'supps_neg_urg_24'='S-UPPS-P: Negative Urgency (24y)',
+  'supps_pos_urg_24'='S-UPPS-P: Positive Urgency (24y)',
+  'supps_lack_premed_24'='S-UPPS-P: Lack of Premeditation (24y)',
+  'supps_lack_persev_24'='S-UPPS-P: Lack of Perseverance (24y)',
+  'supps_sens_seek_24'='S-UPPS-P: Sensation Seeking (24y)',
+  'sdq_prosocial_25'='SDQ: Prosocial behavior (25y)',
+  'sdq_emotional_25'='SDQ: Emotional symptoms (25y)',
+  'sdq_conduct_25'='SDQ: Conduct problems (25y)',
+  'sdq_hyperact_25'='SDQ: Hyperactivity/inattention (25y)',
+  'sdq_peer_25'='SDQ: Peer relationship problems (25y)',
+  'aq_social_skill_sc_25'='AQ: Social Skills (25y)',
+  'aq_attention_switch_sc_25'='AQ: Attention Switching (25y)',
+  'aq_attention_detail_sc_25'='AQ: Attention to Detail (25y)',
+  'aq_communication_sc_25'='AQ: Communication (25y)',
+  'aq_imagination_sc_25'='AQ: Imagination (25y)',
+  'ari_affect_react_sc_25'='ARI: Total Score (25y)',
+  'atsrs_emo_support_sc_25'='ATSRS: Emotional support (25y)',
+  'atsrs_prac_support_sc_25'='ATSRS: Instrumental support (25y)',
+  'work_mem_24'='Working memory: N-back d prime (24y)',
+  'resp_inhib_24'='Response inhibition: Stop-Signal reaction time, ms (24y)', 
+  'screen_time_22'='Hours per day spent using screens on average (22y)',
+  'outdoor_time_22'='Hours per day spent outdoors on average (22y)',
+  'actv_jrnys_22'='Regular walking/cycling journeys (22y)',
+  'vigact_freq_22'='Freq. taking part in strenuous/vigorous activity (22y)',
+  'eat_conscious_25'='Conscious of what they are eating (25y)',
+  'n_hrs_sleep_25'='Number of hours sleeps in 24 hours (25y)', 
+  'enough_sleep_25'='Frequency gets enough sleep (25y)', 
+  'daytime_tired_25' = 'Problem with sleepiness during day time activities (25y)',
+  'smk_vape_cannabis_24'='Nicotine or cannabis use (24y)',
+  'bing_drink_24'='Binge drinking (24y)',
+  'n_illict_drugs_24'='Number of illicit drugs ever used (24y)', 
+  'antisocialb_22'='Anti-social behaviour (22y)',
+  'n_siblings_23'='Number of siblings (23y)',
+  'n_friends_24'='Number of close friends (24y)',
+  'freq_see_parents_25'='Frequency sees parents (25y)',
+  'socmed_freq_24'='Social media use frequency (24y)',
+  'parent_25'='Is a parent (25y)',
+  'partner_25'='Has a partner (25y)',
+  'lives_alone_25'='Lives alone (25y)',
+  'volunteer_22'='Doing volunteer work (22y)',
+  'inedu_22'='In part-/full-time education (22y)',
+  'income_25'='Take-home pay each month (25y)',
+  'job_shift_nights_25'='Has job that involves shift work or night shifts (25y)',
+  'n_jobs_school_25' = 'Number of jobs had since leaving school (25y)',
+  'financ_prob_25'='Had big financial problems past year (25y)',
+  'bullied_23'='Bullied, past 6 months (23y)',
+  'feltlov_grwup_23'='Felt loved growing up (23y)',
+  'feltlov_relat_23'='Felt loved by a partner since 16 (23y)',
+  'relationship_abuse_23' = 'Relationship abuse since 16 (23y)',
+  'childh_maltreat_23' = 'Childhood maltreatment growing up (23y)',
+  'serious_accident_fire_23'='Ever been in a serious accident or fire (23y)',
+  'death_somclos_23'='Unexpected death of someone close (23y)',
+  'bad_exps_24'='Bad experience in past year (24y)',
+  'selfharm_24'='Self-harm history (24y)',
+  'lean_mass_ind_24'='Lean mass index (24y)',
+  'bmi_24'='Body Mass Index (24y)',
+  'heartrate_24'='Heart Rate average, bpm (24y)',
+  'grip_strength_24'='Maximum hand grip strength (24y)',
+  'log_crp_24'='C-Reactive Protein, mg/l log-transformed (24y)',
+  'il6_24'='Interleukin-6,NPX values log2 scale (24y)',
+  'nlr_24' = 'Neutrophil-to-Lymphocyte Ratio (24y)',
+  'wbc_24' = 'White blood cell count 10^9/L (24y)',
+  'log_insulin_24' = 'Insulin uU/mL log-transformed (24y)',
+  'log_triglycerides_24'='Triglycerides mmol/L log-transformed (24y)',
+  'aches_sickness_25' = 'Regular headaches, stomach-aches or sickness (25y)',
+  'gp_visits_24'='GP visits about own health, past year (24y)',
+  'longst_ill_disab_24'='Long-standing illness/disability/infirmity (24y)', 
+  'urbrur_24'='Urban/rural indicator (24y)',
+  'imdq_24'='IMD Neighbourhood deprivation, quintiles (24y)',
+  'townsendq_24'='Townsend deprivation score, quintiles (24y)',
+  'pain_status_18' = 'Pain status (18y)',
+  'pain_status_26'='Pain status (26y)',
+  'pain_status_30'='Pain status (30y)'
+  )
+```
+
+# Selected items
+
+```{r select-items, echo=F}
+# Define theoretical domains/subdomains and selected variables
+domains_tbl <- tibble::tribble(
+  ~domain, ~subdomain, ~vars,
+  
+  "Individual", "Physical health, symptoms and functioning",
+  c(
+    "sf12_sr_hlth_22",
+    "sf12_hlth_limt_mod_act_22",
+    "sf12_ph_accomp_less_22",
+    "aches_sickness_25",
+    "gp_visits_24",
+    "longst_ill_disab_24"
+  ),
+  
+  "Individual", "Vitality and role functioning",
+  c(
+    "sf12_emo_limt_wrk_act_22",
+    "sf12_calm_peace_22",
+    "sf12_energy_22",
+    "sf12_limt_soc_act_22"
+  ),
+  
+  "Individual", "Wellbeing and psychological resources",
+  c(
+    "wellbeing_sc_23",
+    "subj_happy_sc_23",
+    "life_satis_sc_23",
+    "meaning_life_presc_sc_23",
+    "meaning_life_search_sc_23",
+    "basic_psych_needs_auton_sc_23",
+    "basic_psych_needs_compet_sc_23",
+    "basic_psych_needs_relat_sc_23",
+    "gratitude_sc_23",
+    "optimism_sc_23"
+  ),
+  
+  "Individual", "Mental health",
+  c(
+    "smfq_sc_23",
+    "cisr_mild_depres_24",
+    "cisr_general_anxiety_24",
+    "scaared_total_25",
+    "selfharm_24"
+  ),
+  
+  "Individual", "Personality and behavioural traits",
+  c(
+    "sapas_personality_dis_sc_24",
+    "supps_neg_urg_24",
+    "supps_pos_urg_24",
+    "supps_lack_premed_24",
+    "supps_lack_persev_24",
+    "supps_sens_seek_24",
+    "antisocialb_22"
+  ),
+  
+  "Individual", "Socio-emotional and neurodevelopmental functioning",
+  c(
+    "sdq_prosocial_25",
+    "sdq_emotional_25",
+    "sdq_conduct_25",
+    "sdq_hyperact_25",
+    "sdq_peer_25",
+    "aq_social_skill_sc_25",
+    "aq_attention_switch_sc_25",
+    "aq_attention_detail_sc_25",
+    "aq_communication_sc_25",
+    "aq_imagination_sc_25",
+    "ari_affect_react_sc_25"
+  ),
+  
+  "Individual", "Cognition and executive function",
+  c(
+    "work_mem_24",
+    "resp_inhib_24"
+  ),
+  
+  "Interpersonal", "Social support",
+  c(
+    "atsrs_emo_support_sc_25",
+    "atsrs_prac_support_sc_25"
+  ),
+  
+  "Interpersonal", "Relationships",
+  c(
+    "n_friends_24",
+    "freq_see_parents_25",
+    "partner_25"
+  ),
+  
+  "Interpersonal", "Household composition and family structure",
+  c(
+    "parent_25",
+    "lives_alone_25",
+    "n_siblings_23"
+  ),
+  
+  "Interpersonal", "Relational experiences",
+  c(
+    "feltlov_grwup_23",
+    "feltlov_relat_23",
+    "bullied_23",
+    "relationship_abuse_23",
+    "childh_maltreat_23"
+  ),
+  
+  "Social-contextual", "Socioeconomic, education and work context",
+  c(
+    "inedu_22",
+    "income_25",
+    "job_shift_nights_25",
+    "n_jobs_school_25",
+    "financ_prob_25"
+  ),
+  
+  "Social-contextual", "Neighbourhood context",
+  c(
+    "urbrur_24",
+    "imdq_24",
+    "townsendq_24"
+  ),
+  
+  "Social-contextual", "Adversity and life events",
+  c(
+    "serious_accident_fire_23",
+    "death_somclos_23",
+    "bad_exps_24"
+  ),
+  
+  "Lifestyle", "Activities, time use and roles",
+  c(
+    "screen_time_22",
+    "socmed_freq_24",
+    "outdoor_time_22",
+    "actv_jrnys_22",
+    "vigact_freq_22",
+    "volunteer_22"
+  ),
+  
+  "Lifestyle", "Diet and sleep",
+  c(
+    "eat_conscious_25",
+    "n_hrs_sleep_25",
+    "enough_sleep_25",
+    "daytime_tired_25"
+  ),
+  
+  "Lifestyle", "Substance use",
+  c(
+    "smk_vape_cannabis_24",
+    "bing_drink_24",
+    "n_illict_drugs_24"
+  ),
+  
+  "Biological", "Anthropometry, strength and vitals",
+  c(
+    "lean_mass_ind_24",
+    "bmi_24",
+    "heartrate_24",
+    "grip_strength_24"
+  ),
+  
+  "Biological", "Inflammatory and metabolic markers",
+  c(
+    "log_crp_24",
+    "il6_24",
+    "nlr_24",
+    "wbc_24",
+    "log_insulin_24",
+    "log_triglycerides_24"
+  )
+)
+
+# Convert variable names to long labels and collapse by subdomain
+man_dom_df <- domains_tbl %>%
+  unnest_longer(vars, values_to = "variable") %>%
+  mutate(item = unname(varlabs[variable])) %>%
+  group_by(domain, subdomain) %>%
+  mutate(
+    domain_display = if_else(row_number() == 1 & !duplicated(domain), domain, ""),
+    subdomain_display = if_else(row_number() == 1, subdomain, "")
+  ) %>%
+  ungroup() %>%
+  select(
+    domain = domain_display,
+    subdomain = subdomain_display,
+    item
+  )
+
+# Generate gt table
+theor_dom_tab <- man_dom_df %>%
+  gt() %>%
+  cols_label(
+    domain = "Theoretical domain",
+    subdomain = "Sub-domain",
+    item = "Item"
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels()
+  )
+
+# Add abbreviations
+theor_dom_tab <- theor_dom_tab %>%
+  tab_source_note(
+    source_note = "Abbreviations: 
+    AQ = Autism-Spectrum Quotient; 
+    ARI = Affective Reactivity Index; 
+    ATSRS = Adult Temperament / Social Relationships Scale; 
+    BPNSS = Basic Psychological Needs Satisfaction Scale; 
+    CIS-R = Clinical Interview Schedule-Revised; 
+    IMD = Index of Multiple Deprivation; 
+    SAPAS = Standardised Assessment of Personality - Abbreviated Scale; 
+    SCAARED = Screen for Adult Anxiety Related Disorders; 
+    SDQ = Strengths and Difficulties Questionnaire; 
+    SF-12 = Short Form-12; 
+    S-UPPS-P = Short UPPS-P Impulsive Behaviour Scale"
+  )
+
+theor_dom_tab
+
+theor_dom_tab %>% gtsave(filename=paste0(path_to_outputs, "theoretical_domains_tab.docx"))
+```

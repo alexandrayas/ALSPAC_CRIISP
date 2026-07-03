@@ -1,0 +1,705 @@
+---
+title: "Identifying network-derived biopsychosocial domains"
+author: "Alexandria Andrayas"
+date: "`r Sys.Date()`"
+output:
+  word_document:
+    toc: true
+#  html_document:
+#    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE)
+```
+
+# Load packages
+
+```{r packages, message=FALSE, echo=F}
+library(tidyverse)
+library(labelled)
+library(sticky)
+library(mice)
+library(EGAnet)
+library(ggpubr)
+library(dendextend)
+library(gt)
+library(gtsummary)
+```
+
+# Load and subset data and specify paths
+
+```{r data, echo=F}
+# Load dataset
+load('//path/to/data/clean_data.rda')
+
+# Subset dataset to those with data on pain at ages 26 AND 30
+df <- alldf[!is.na(alldf$pain_status_26) & !is.na(alldf$pain_status_30),]
+
+# Path to outputs
+path_to_outputs <- "//path/to/outputs/"
+```
+
+# Variable labels
+
+```{r labs, echo=F}
+# List of long variable names
+varlabs <- list(
+  'aln'='Pregnancy identifier',
+  'qlet'='Birth order (within pregnancy)',
+  'sex'='Sex assigned at birth', 
+  'ethnicity'='Ethnicity',
+  'parent_sc_0' = 'Highest parental social class at birth',
+  'pain_prob_7' = 'Pain problem in childhood (7y)',
+  'parent_pain_12' = 'Parental pain (12y)',
+  'sf12_sr_hlth_22'='SF-12: Self-rated health (22y)',
+  'sf12_hlth_limt_mod_act_22'='SF-12: Health limits moderate activities (22y)',
+  'sf12_ph_accomp_less_22'='SF-12: Freq. accomplished less due to physical health (22y)', 
+  'sf12_emo_limt_wrk_act_22'='SF-12: Freq. work/activities limited by emotions (22y)',
+  'sf12_calm_peace_22'='SF-12: Freq. felt calm and peaceful (22y)',
+  'sf12_energy_22'='SF-12: Freq. had lot of energy (22y)',
+  'sf12_limt_soc_act_22'='SF-12: Freq. health/emotions interfered with social activities (22y)',
+  'wellbeing_sc_23'='Warwick-Edinburgh Mental Wellbeing Scale score (23y)', 
+  'subj_happy_sc_23'='Subjective Happiness Scale score (23y)',
+  'life_satis_sc_23'='Life Satisfaction Scale score (23y)',
+  'meaning_life_presc_sc_23'='Meaning in Life Questionnaire: Presence score (23y)',
+  'meaning_life_search_sc_23'='Meaning in Life Questionnaire: Search score (23y)',
+  'basic_psych_needs_auton_sc_23'='BPNSS: Autonomy score (23y)', 
+  'basic_psych_needs_compet_sc_23'='BPNSS: Competence score (23y)', 
+  'basic_psych_needs_relat_sc_23'='BPNSS: Relatedness score (23y)',
+  'gratitude_sc_23'='Gratitude Questionnaire score (23y)',
+  'optimism_sc_23'='Life Orientation Test-Revised Optimism score (23y)',
+  'smfq_sc_23'='Short Moods and Feelings Questionnaire score (23y)',
+  'cisr_mild_depres_24'='CIS-R: Depression (24y)',
+  'cisr_general_anxiety_24'='CIS-R: Generalised anxiety disorder (24y)',
+  'scaared_total_25'='SCAARED: Total score (25y)', 
+  'sapas_personality_dis_sc_24'='SAPAS: Total score (24y)',  
+  'supps_neg_urg_24'='S-UPPS-P: Negative Urgency (24y)',
+  'supps_pos_urg_24'='S-UPPS-P: Positive Urgency (24y)',
+  'supps_lack_premed_24'='S-UPPS-P: Lack of Premeditation (24y)',
+  'supps_lack_persev_24'='S-UPPS-P: Lack of Perseverance (24y)',
+  'supps_sens_seek_24'='S-UPPS-P: Sensation Seeking (24y)',
+  'sdq_prosocial_25'='SDQ: Prosocial behavior (25y)',
+  'sdq_emotional_25'='SDQ: Emotional symptoms (25y)',
+  'sdq_conduct_25'='SDQ: Conduct problems (25y)',
+  'sdq_hyperact_25'='SDQ: Hyperactivity/inattention (25y)',
+  'sdq_peer_25'='SDQ: Peer relationship problems (25y)',
+  'aq_social_skill_sc_25'='AQ: Social Skills (25y)',
+  'aq_attention_switch_sc_25'='AQ: Attention Switching (25y)',
+  'aq_attention_detail_sc_25'='AQ: Attention to Detail (25y)',
+  'aq_communication_sc_25'='AQ: Communication (25y)',
+  'aq_imagination_sc_25'='AQ: Imagination (25y)',
+  'ari_affect_react_sc_25'='ARI: Total Score (25y)',
+  'atsrs_emo_support_sc_25'='ATSRS: Emotional support (25y)',
+  'atsrs_prac_support_sc_25'='ATSRS: Instrumental support (25y)',
+  'work_mem_24'='Working memory: N-back d prime (24y)',
+  'resp_inhib_24'='Response inhibition: Stop-Signal reaction time, ms (24y)', 
+  'screen_time_22'='Hours per day spent using screens on average (22y)',
+  'outdoor_time_22'='Hours per day spent outdoors on average (22y)',
+  'actv_jrnys_22'='Regular walking/cycling journeys (22y)',
+  'vigact_freq_22'='Freq. taking part in strenuous/vigorous activity (22y)',
+  'eat_conscious_25'='Conscious of what they are eating (25y)',
+  'n_hrs_sleep_25'='Number of hours sleeps in 24 hours (25y)', 
+  'enough_sleep_25'='Frequency gets enough sleep (25y)', 
+  'daytime_tired_25' = 'Problem with sleepiness during day time activities (25y)',
+  'smk_vape_cannabis_24'='Nicotine or cannabis use (24y)',
+  'bing_drink_24'='Binge drinking (24y)',
+  'n_illict_drugs_24'='Number of illicit drugs ever used (24y)', 
+  'antisocialb_22'='Anti-social behaviour (22y)',
+  'n_siblings_23'='Number of siblings (23y)',
+  'n_friends_24'='Number of close friends (24y)',
+  'freq_see_parents_25'='Frequency sees parents (25y)',
+  'socmed_freq_24'='Social media use frequency (24y)',
+  'parent_25'='Is a parent (25y)',
+  'partner_25'='Has a partner (25y)',
+  'lives_alone_25'='Lives alone (25y)',
+  'volunteer_22'='Doing volunteer work (22y)',
+  'inedu_22'='In part-/full-time education (22y)',
+  'income_25'='Take-home pay each month (25y)',
+  'job_shift_nights_25'='Has job that involves shift work or night shifts (25y)',
+  'n_jobs_school_25' = 'Number of jobs had since leaving school (25y)',
+  'financ_prob_25'='Had big financial problems past year (25y)',
+  'bullied_23'='Bullied, past 6 months (23y)',
+  'feltlov_grwup_23'='Felt loved growing up (23y)',
+  'feltlov_relat_23'='Felt loved by a partner since 16 (23y)',
+  'relationship_abuse_23' = 'Relationship abuse since 16 (23y)',
+  'childh_maltreat_23' = 'Childhood maltreatment growing up (23y)',
+  'serious_accident_fire_23'='Ever been in a serious accident or fire (23y)',
+  'death_somclos_23'='Unexpected death of someone close (23y)',
+  'bad_exps_24'='Bad experience in past year (24y)',
+  'selfharm_24'='Self-harm history (24y)',
+  'lean_mass_ind_24'='Lean mass index (24y)',
+  'bmi_24'='Body Mass Index (24y)',
+  'heartrate_24'='Heart Rate average, bpm (24y)',
+  'grip_strength_24'='Maximum hand grip strength (24y)',
+  'log_crp_24'='C-Reactive Protein, mg/l log-transformed (24y)',
+  'il6_24'='Interleukin-6,NPX values log2 scale (24y)',
+  'nlr_24' = 'Neutrophil-to-Lymphocyte Ratio (24y)',
+  'wbc_24' = 'White blood cell count 10^9/L (24y)',
+  'log_insulin_24' = 'Insulin uU/mL log-transformed (24y)',
+  'log_triglycerides_24'='Triglycerides mmol/L log-transformed (24y)',
+  'aches_sickness_25' = 'Regular headaches, stomach-aches or sickness (25y)',
+  'gp_visits_24'='GP visits about own health, past year (24y)',
+  'longst_ill_disab_24'='Long-standing illness/disability/infirmity (24y)', 
+  'urbrur_24'='Urban/rural indicator (24y)',
+  'imdq_24'='IMD Neighbourhood deprivation, quintiles (24y)',
+  'townsendq_24'='Townsend deprivation score, quintiles (24y)',
+  'pain_status_18' = 'Pain status (18y)',
+  'pain_status_26'='Pain status (26y)',
+  'pain_status_30'='Pain status (30y)'
+  )
+#names(varlabs)[!names(varlabs) %in% colnames(df)]
+#colnames(df)[!colnames(df) %in% names(varlabs)]
+```
+
+# Tidy and check dataset 
+
+```{r clean, echo=F}
+# Subset dataset to only include IDs, demographics, multidomain exposure items and pain outcomes
+df <- df[,names(varlabs)]
+
+# Exclude IDs, confounders and outcomes
+non_exp_vars <- c("aln", "qlet",
+                  'sex','ethnicity','parent_sc_0',
+                  'pain_prob_7','parent_pain_12', 
+                  'pain_status_18', 'pain_status_26', 'pain_status_30')
+
+# Covariates
+covariates <- c('sex','ethnicity','parent_sc_0', 'pain_prob_7','parent_pain_12')
+
+# Number of exposure items initially included in EGA
+analy_vars <- colnames(df)[!colnames(df) %in% non_exp_vars]
+#length(analy_vars) #92
+
+# Recode binary variables from factor to numeric
+numeric_vars <- df %>% select(-all_of(non_exp_vars)) %>% select(where(~ is.numeric(.x))) %>% names()
+
+# Check variable types
+categorical_vars <- df %>%
+  select(-all_of(non_exp_vars)) %>%
+  select(where(~ is.factor(.x) && nlevels(.x) > 2)) %>%
+  names()
+
+binary_vars <- df %>%
+  select(-all_of(non_exp_vars)) %>%
+  select(where(~ is.factor(.x) && nlevels(.x) == 2)) %>%
+  names()
+
+ordered_vars <- df %>%
+  select(-all_of(non_exp_vars)) %>%
+  select(where(~ is.ordered(.x))) %>%
+  names()
+
+#length(ordered_vars)
+#table(categorical_vars %in% ordered_vars)
+#length(numeric_vars)+length(categorical_vars)+length(binary_vars)
+#ncol(df)-length(non_exp_vars)
+
+#!!!
+#df <- df %>% mutate(across(all_of(binary_vars), ~ {as.integer(f) - 1}))
+
+# Assign labels
+var_label(df) <- varlabs[colnames(df)]
+
+# Persist label attributes
+df <- sticky_all(df)
+```
+
+# Missingness proportions
+
+```{r missingness}
+# Number of complete cases
+nrow(df[complete.cases(df[,analy_vars]),])
+#393
+nrow(df[complete.cases(df[,c(analy_vars,covariates)]),])
+#286
+
+# Item-level missingness
+miss_tab <- data.frame(
+  var = c(analy_vars,covariates),
+  n_missing = colSums(is.na(df[, c(analy_vars,covariates)])),
+  prop_missing = colMeans(is.na(df[, c(analy_vars,covariates)]))
+) |>
+  dplyr::arrange(desc(prop_missing))
+
+miss_tab
+
+# Summary range
+range(miss_tab$prop_missing[!miss_tab$var %in% 'sex'])
+median(miss_tab$prop_missing)
+quantile(miss_tab$prop_missing[!miss_tab$var %in% 'sex'], c(.25, .75))
+head(miss_tab, 10)
+```
+
+# Load imputed data
+
+```{r load-imp-dat}
+# Load imputed data
+load('//path/to/data/mult_pain_imp_all.rda')
+```
+
+# Run EGAs
+
+```{r imp-egas-non-redundant, out.width='100%', warning=F}
+# Load vector of identified redundancies
+load(paste0(path_to_outputs,'redundant_vars.rda'))
+nonredund_vars <- setdiff(analy_vars, redundant_vars)
+
+# Function to run EGA on datasets
+get_imp_ega <- function(imp_data, variables) {
+  n_imputations <- imp_data$m
+  ega_list <- vector('list', n_imputations)
+  for(i in 1:n_imputations) {
+    complete_data <- complete(imp_data, i)[,variables]
+    set.seed(5402)
+    ega_list[[i]] <- EGA(data=complete_data,
+                         model='glasso',
+                         algorithm='walktrap',
+                         plot.EGA=FALSE)
+  }
+  return(ega_list)
+}
+
+# Run EGA for each imputed dataset removing redundant
+imp_egas <- get_imp_ega(imp_all, nonredund_vars)
+
+# View EGA plots - only first four as too many too show
+comp_ega_plts <- compare.EGA.plots(input.list=(imp_egas[c(1:4)]), columns=2, plot.all=F, label.size=1.5, vsize=2)
+ggarrange(plotlist = comp_ega_plts$individual, ncol=2, nrow=2, 
+          common.legend = TRUE, legend = "bottom")
+```
+
+# Identify communities
+
+## Co-occurrence matrix
+
+Shows how often out of m imputations each pair of items cluster together.
+
+```{r co-occur, out.width='100%'}
+# Function to create co-occurrence matrix
+get_co_occur <- function(impdat, var_names) {
+  m <- length(impdat)
+  wc_list <- lapply(impdat, function(ega) ega$wc[var_names])
+  
+  mats <- lapply(wc_list, function(wc) {
+    mat <- outer(wc, wc, `==`)
+    mat[is.na(mat)] <- FALSE
+    mat
+  })
+  
+  C <- Reduce(`+`, mats)
+  dimnames(C) <- list(var_names, var_names)
+  diag(C) <- m
+  
+  C
+}
+
+co_occur <- get_co_occur(imp_egas, nonredund_vars)
+
+# Plot co-occurrence matrix
+melted_co_occur <- as.data.frame(as.table(co_occur))
+
+plt_mat <- function(melt_obj, fill_lab, fill_val){
+  ggplot(melt_obj, aes(x=Var1, y=Var2, fill=.data[[fill_val]])) +
+    geom_tile() +
+    scale_fill_gradient(low='white', high='steelblue') +
+    labs(x='', y='', fill=fill_lab) +
+    theme_minimal() +
+    theme(axis.text.x=element_text(angle=45, hjust=1),
+          axis.text.y=element_text(size=5),
+          legend.position='bottom')
+}
+
+co_occur_plt <- plt_mat(melted_co_occur, 'Co-occurrence', 'Freq')
+
+ggsave(plot=co_occur_plt, filename=paste0(path_to_outputs,"co_occur_plt.png"), width=14, height=9, dpi=350)
+```
+
+## Dendrogram
+
+Then used the co-occurance matrix to do hierarchical clustering and identify clusters. We then specify the number of clusters to get item assignments (based on mean number of dimensions across imputations).
+
+```{r hclust, out.width='100%'}
+# Convert to distance matrix (1 - proportion of times clustered together)
+co_occur_prop <- co_occur / length(imp_egas)
+dist_mat <- as.dist(1 - co_occur_prop)
+
+# Hierarchical clustering
+hc <- hclust(dist_mat, method='average')  # or 'complete'
+
+# Number of dimensions identified in each imputation
+n_dims <- sapply(imp_egas, function(x) x$n.dim)
+table(n_dims)
+k_mode <- as.integer(names(sort(table(n_dims), decreasing=TRUE)[1]))
+
+# Plot dendrogram
+dhc <- as.dendrogram(hc)
+dhc <- dhc %>%
+  color_branches(k=k_mode) %>%
+  color_labels(k=k_mode)  %>%
+  set("labels", varlabs[labels(dhc)]) %>%
+  set("labels_cex", 0.5) 
+
+png(paste0(path_to_outputs,'dendrogram.png'), width=9, height=6, units='in', res=350)
+par(mar=c(10, 4, 1, 0))
+plot(dhc, main=NULL, cex.axis=0.7, dLeaf=0.02)
+dev.off()
+```
+
+# Cluster assignments
+
+```{r imp-cluster-assign}
+# Get cluster assignments
+clusters_imp <- cutree(hc, k=k_mode)
+cluster_imp_items <- split(names(clusters_imp), clusters_imp)
+lengths(cluster_imp_items)
+
+# Long labels
+clusters_imp_longlabs <- clusters_imp
+names(clusters_imp_longlabs) <- varlabs[names(clusters_imp_longlabs)] 
+
+# Print figure label footnote
+#cat(paste(names(clusters_imp), "=", names(clusters_imp_longlabs)), sep = "; ")
+
+# Domain names
+cluslabs <- list(
+  `clus1` = "Functional-behavioural health difficulties",
+  `clus2` = "Positive wellbeing",
+  `clus3` = "Distress and adversity",
+  `clus4` = "Social communication and peer problems",
+  `clus5` = "Interpersonal support and security",
+  `clus6` = "Activity engagement and resources",
+  `clus7` = "Bio-health indicators"
+)
+
+# Create data frame to display data-driven domains
+clusters_df <- data.frame(
+  `n`=rep(1:length(cluslabs), times=lengths(cluster_imp_items)),
+  `domain`=rep(unname(unlist(cluslabs)), times=lengths(cluster_imp_items)), 
+  `items`=names(clusters_imp_longlabs[order(clusters_imp_longlabs)]),
+  `label`=names(clusters_imp[order(clusters_imp)])
+  )
+
+# Generate gt table
+clusters_tab <- clusters_df %>%
+  gt() %>%
+  cols_label(
+    `n`='Number',
+    `domain`='Network-derived domain',
+    `items`='Items',
+    `label`='Label'
+  ) %>%
+  tab_style(style=cell_text(weight='bold'), 
+            locations=cells_column_labels()) %>%
+  tab_style(style=cell_text(whitespace='pre-wrap'),
+            locations=cells_body(columns=c(items,label)))
+
+clusters_tab %>% gtsave(filename=paste0(path_to_outputs,"network_domains_tab.docx"))
+```
+
+## Average EGA plot
+
+```{r imp-avg-ega, out.width='100%'}
+# Get average network
+imp_networks_list <- lapply(imp_egas, function(ega) ega$network)
+imp_networks <- do.call(cbind, imp_networks_list)
+imp_networks <- array(imp_networks, dim=c(dim(imp_networks_list[[1]]), length(imp_networks_list)))
+
+avg_imp_netw <- apply(imp_networks, c(1, 2), mean, na.rm=TRUE)
+rownames(avg_imp_netw) <- names(clusters_imp)
+colnames(avg_imp_netw) <- names(clusters_imp)
+
+# Build EGAnet object
+ega_avg <- list(
+  network=avg_imp_netw,
+  wc=clusters_imp
+)
+class(ega_avg) <- "EGA"
+
+# Domain labels in the order used by the plot
+domain_labs <- unname(cluslabs)
+
+# colours in the same order
+domain_cols <- c("#56B4E9", "#F0E442", "#009E73", "#D55E00","#CC79A7", "#0072B2", "#E69F00")
+domain_cols <- domain_cols[seq_along(cluslabs)]
+#palette.colors(palette = "Okabe-Ito") #colour-blind friendly
+
+# Plot
+ega_avg_plt <- plot(
+  ega_avg,
+  label.size = 3,
+  vsize = 6,
+  color.palette = unname(domain_cols)
+) +
+  scale_colour_identity(
+    name = "Domain:  ",
+    breaks = unname(domain_cols),
+    labels = domain_labs,
+    guide = "legend"
+  ) +
+  guides(colour = guide_legend(ncol = 2, override.aes = list(size = 5))
+  ) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(size = 8),
+    legend.text = element_text(size = 8),
+    legend.key.size = unit(2, "mm"),
+    legend.spacing.y = unit(1, "mm")
+  )
+
+ega_avg_plt
+
+ggsave(plot=ega_avg_plt, filename=paste0(path_to_outputs,"avg_ega_plt.png"), width=174, height=194, units="mm", dpi=350)
+```
+
+### Label key table
+
+```{r labs, echo=F}
+label_key <- data.frame('item' = names(unlist(varlabs[nonredund_vars])), 
+                        'label' = unlist(varlabs[nonredund_vars]))
+
+label_key <- label_key[order(label_key$item),]
+
+label_key %>%
+  gt() %>%
+  cols_label(item = "Short label", label = "Long label") %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels()
+  ) %>% gtsave(filename=paste0(path_to_outputs,"label_key.docx"))
+```
+
+### 3D plot
+
+```{r imp-3d-plt, echo=F, out.width='100%'}
+#!!! blocked out for word doc !!!
+
+#library(igraph)
+#library(plotly)
+
+# Force weights to be non-negative for the layout
+#W <- abs(avg_imp_netw)
+#diag(W) <- 0
+
+#g <- graph_from_adjacency_matrix(W, mode="undirected", weighted=TRUE, diag=FALSE)
+
+#set.seed(1)
+#var_coord <- layout_with_fr(g, dim=3, weights=E(g)$weight)
+#rownames(var_coord) <- colnames(W)
+
+#plot_ly(
+#  x=var_coord[,1], y=var_coord[,2], z=var_coord[,3],
+#  type="scatter3d", mode="markers+text",
+#  text=names(clusters_imp), textposition="top center",
+#  color=factor(clusters_imp), #colour by communities
+#  marker=list(size=4)
+#  ) %>%
+#  layout(scene=list(
+#    xaxis=list(title="Dim 1"),
+#    yaxis=list(title="Dim 2"),
+#    zaxis=list(title="Dim 3")
+#  ))
+```
+
+## Average network loadings
+
+```{r imp-avg-netw-loadings, warning=F, message=F, out.width='100%'}
+# Get network loadings from average EGA objects (sparse set to 0)
+avg_imp_nwloads <- net.loads(ega_avg, minimum=0.1) #defaults to 0.1
+
+# Print average standardised loadings
+avg_imp_nwloads$std %>% 
+  as.data.frame() %>%
+  tibble::rownames_to_column(var = "item") %>%
+  tibble::as_tibble() %>%
+  dplyr::rename_with(~ unlist(cluslabs), -item) %>%
+  gt() %>%
+  fmt_number(decimals = 3) %>%
+  gtsave(filename=paste0(path_to_outputs,"network_loadings_tab.docx"))
+
+#Plot standardised loadings
+melted_loads <- as.data.frame(as.table(avg_imp_nwloads$std))
+ggplot(melted_loads, aes(x=Var2, y=Var1, fill=Freq)) +
+  geom_tile() +
+  #geom_text(aes(label=sprintf("%.2f", value)), size=2) +
+  scale_x_discrete(breaks=1:length(cluslabs),
+                     labels=paste0('\n', cluslabs)) +
+  scale_fill_gradient2(low='coral', mid='white', high='steelblue') +
+  labs(x='', y='', fill='Network loading') +
+  theme_minimal() +
+  theme(axis.text.x=element_text(size=5, face="bold"),
+        axis.text.y=element_text(hjust=1, size=5),
+        legend.position='right')
+```
+
+## Network scores
+
+```{r imp-netw-sc, warning=F, message=F}
+# Get list of networks
+imp_networks_list <- lapply(imp_egas, function(x) x[['network']])
+
+# Function to get run net.scores
+get_imp_netw_sc <- function(imp_data, variables) {
+  n_imputations <- imp_data$m
+  netw_sc_list <- vector('list', n_imputations)
+  for(i in 1:n_imputations) {
+    compl_data <- complete(imp_data, i)[, variables]
+    netw <- imp_networks_list[[i]]
+    netw_sc_list[[i]] <- suppressMessages(
+      net.scores(data=compl_data, 
+                 A=netw, 
+                 wc=clusters_imp,
+                 loading.method="revised")
+      )
+  }
+  return(netw_sc_list)
+}
+
+# Run net.scores for each imputed dataset
+imp_netw_scores <- get_imp_netw_sc(imp_all, nonredund_vars)
+##Warning: Several variables were coerced to numeric values. These variables were changed to numeric values
+
+# Z-standardise scores and add column names
+imp_netw_z_scs <- lapply(imp_netw_scores, function(x) {
+  scs <- as.data.frame(x$scores$std.scores)
+  colnames(scs) <- paste0("clus", seq_along(cluster_imp_items))
+  scs %>% mutate(across(everything(), ~ as.numeric(scale(.x))))
+})
+save(imp_netw_z_scs, file="//path/to/data/imp_netw_z_scs.rda")
+```
+
+### Average correlations between scores
+
+```{r imp-avg-corr, out.width='100%'}
+# Get correlations between network scores for each imputation
+imp_netwsc_corrs_list <- lapply(imp_netw_z_scs, auto.correlate)
+
+# Fisher z-transform, average, then back-transform
+z_corrs_list <- lapply(imp_netwsc_corrs_list, function(R) {
+  R <- as.matrix(R)
+  diag(R) <- NA  # avoid atanh(1) = Inf on the diagonal
+  atanh(R)
+})
+
+z_array <- simplify2array(z_corrs_list)
+
+avg_z_corrs <- apply(z_array, c(1, 2), mean, na.rm = TRUE)
+
+avg_imp_netwsc_corrs <- tanh(avg_z_corrs)
+diag(avg_imp_netwsc_corrs) <- 1
+
+rownames(avg_imp_netwsc_corrs) <- cluslabs
+colnames(avg_imp_netwsc_corrs) <- cluslabs
+
+# Plot correlations
+long_imp_nws_corr <-as.data.frame(as.table(avg_imp_netwsc_corrs))
+
+avg_netwsc_corrs <- ggplot(long_imp_nws_corr, aes(x=Var2, y=Var1)) + 
+  geom_raster(aes(fill=Freq)) + 
+  geom_text(aes(label=sprintf("%.2f", Freq)), size=5) +
+  scale_fill_gradient2(low="#5D3A9B", mid="#FFFFFF", high="#E69F00") + 
+  theme(axis.title=element_blank(),
+        axis.text.x=element_text(size=15, angle=45, hjust=1),
+        axis.text.y=element_text(size=15),
+        legend.title=element_blank(),
+        legend.text=element_text(size=12))
+
+ggsave(plot=avg_netwsc_corrs, filename=paste0(path_to_outputs,"avg_netwsc_corrs.png"), width=14, height=12, dpi=350)
+```
+
+### Density plots
+
+```{r imp-netw-sc-plts, echo=F, out.width='100%'}
+long_netw_z_scs <- bind_rows(
+  lapply(seq_along(imp_netw_z_scs), function(i) {
+    as.data.frame(imp_netw_z_scs[[i]]) %>%
+      mutate(impn=i)
+  })
+) %>%
+  pivot_longer(
+    cols=starts_with("clus"),
+    names_to="cluster",
+    values_to="score"
+  )
+
+hists <- lapply(names(cluslabs), function(cl){
+  ggplot(filter(long_netw_z_scs, cluster == cl),
+         aes(x=score, colour=impn, group=impn)) +
+    geom_density(linewidth=0.2, na.rm=TRUE) +
+    scale_colour_gradient(low="#5D3A9B", high="#E69F00", name="Imputation number") +
+    theme_minimal() +
+    theme(text=element_text(size=8)) +
+    labs(x=cluslabs[[cl]], y="Density")
+})
+
+hist_plt <- ggarrange(plotlist = hists, ncol=2, nrow=4,
+                      common.legend = TRUE,
+                      legend = "bottom")
+hist_plt
+
+#ggsave(plot=hist_plt, filename=paste0(path_to_outputs,"hist_plt.png"), width=8, height=10, dpi=350)
+
+#!! look at responses vs network scores to get a feel of what they represent
+```
+
+# Patterns of missingness in included variables
+
+```{r desc-stats-clus1, message=F, warning=F, echo=F}
+#!blocked out as doesn't show in markdown
+#library(naniar)
+#fix_upset_labs <- function(x) {#function to remove NAs from upset plot
+#  if (!is.null(x$label) && is.character(x$label)) {
+#    x$label <- sub("_NA$", "", x$label)
+#  }
+#  if (!is.null(x$children)) x$children <- lapply(x$children, fix_upset_labs)
+#  if (!is.null(x$grobs))    x$grobs    <- lapply(x$grobs,    fix_upset_labs)
+#  if (!is.null(x$grob))     x$grob     <- fix_upset_labs(x$grob)
+#  x
+#}
+
+#png(paste0(path_to_outputs,"upset_missing_plt.png"), width = 9, height = 6, units = "in", res = 350)
+#upset_ana_samp <- gg_miss_upset(df[,nonredund_vars], nsets = 20, point.size = 1.4, number.angles = 0, text.scale = 0.7)
+#upset_ana_samp$Matrix   <- fix_upset_labs(upset_ana_samp$Matrix)
+#upset_ana_samp
+#dev.off()
+#!
+```
+
+# Descriptive statistics per cluster
+
+```{r desc-stats-domains, message=F, warning=F, echo=F}
+make_desc_tab <- function(dom_items) {
+  
+  problem_vars <- c(
+    "sapas_personality_dis_sc_24",
+    "sdq_conduct_25",
+    "sdq_peer_25"
+    )
+
+  cont_vars <- intersect(problem_vars, dom_items)
+  
+  type_arg <- if (length(cont_vars) > 0) {
+    list(all_of(cont_vars) ~ "continuous")
+  } else {
+    NULL
+  }
+  
+  tbl_summary(
+    df[, dom_items, drop = FALSE],
+    missing = "no",
+    type = type_arg
+  ) %>%
+    italicize_levels() %>% 
+    add_n(statistic = "{N_miss} ({p_miss}%)") %>%
+    modify_header(n = "**Missing**")
+}
+
+desc_tab_list <- lapply(cluster_imp_items, make_desc_tab)
+desc_tab_by_domain <- tbl_stack(desc_tab_list, group_header = unlist(cluslabs))
+
+desc_tab_by_domain %>% 
+  as_gt() %>% 
+  gtsave(filename=paste0(path_to_outputs,"desc_stats_by_domain.docx"))
+```
